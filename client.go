@@ -98,10 +98,12 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 
 func (m *Map) locate(rw http.ResponseWriter, req *http.Request) {
 	grid := req.FormValue("gridId")
+	setZero := false
 	err := m.db.View(func(tx *bbolt.Tx) error {
 		grids := tx.Bucket([]byte("grids"))
 		if grids == nil {
-			return fmt.Errorf("grid not found")
+			setZero = true
+			return nil
 		}
 		curRaw := grids.Get([]byte(grid))
 		cur := GridData{}
@@ -115,6 +117,26 @@ func (m *Map) locate(rw http.ResponseWriter, req *http.Request) {
 		fmt.Fprintf(rw, "%d;%d", cur.Coord.X, cur.Coord.Y)
 		return nil
 	})
+	if setZero {
+		err = m.db.Update(func(tx *bbolt.Tx) error {
+			b, err := tx.CreateBucketIfNotExists([]byte("grids"))
+			if err != nil {
+				return err
+			}
+			cur := GridData{}
+			cur.ID = grid
+			cur.Coord.X = 0
+			cur.Coord.Y = 0
+
+			raw, err := json.Marshal(cur)
+			if err != nil {
+				return err
+			}
+			b.Put([]byte(grid), raw)
+			fmt.Fprintf(rw, "%d;%d", cur.Coord.X, cur.Coord.Y)
+			return nil
+		})
+	}
 	if err != nil {
 		rw.WriteHeader(404)
 	}

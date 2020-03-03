@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -10,32 +11,20 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func (m *Map) setZero(rw http.ResponseWriter, req *http.Request) {
+func (m *Map) wipe(rw http.ResponseWriter, req *http.Request) {
 	user, pass, _ := req.BasicAuth()
 	if !m.getAuth(user, pass).Has(AUTH_ADMIN) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	grid := req.FormValue("gridId")
 	m.db.Update(func(tx *bbolt.Tx) error {
 		tx.DeleteBucket([]byte("grids"))
-		b, err := tx.CreateBucketIfNotExists([]byte("grids"))
-		if err != nil {
-			return err
-		}
-		cur := GridData{}
-		cur.ID = grid
-		cur.Coord.X = 0
-		cur.Coord.Y = 0
-
-		raw, err := json.Marshal(cur)
-		if err != nil {
-			return err
-		}
-		b.Put([]byte(grid), raw)
+		tx.DeleteBucket([]byte("markers"))
 		return nil
 	})
-	os.RemoveAll(m.gridStorage)
+	for z := 0; z <= 5; z++ {
+		os.RemoveAll(fmt.Sprintf("%s/%d", m.gridStorage, z))
+	}
 }
 
 func (m *Map) setUser(rw http.ResponseWriter, req *http.Request) {

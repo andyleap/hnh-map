@@ -54,7 +54,7 @@ func main() {
 	http.HandleFunc("/api/v1/markers", m.getMarkers)
 
 	// Admin endpoints
-	http.HandleFunc("/api/admin/setZeroGrid", m.setZero)
+	http.HandleFunc("/api/admin/wipe", m.wipe)
 	http.HandleFunc("/api/admin/setUser", m.setUser)
 
 	http.Handle("/grids/", http.StripPrefix("/grids", http.FileServer(http.Dir(m.gridStorage))))

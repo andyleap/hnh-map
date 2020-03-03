@@ -24,8 +24,7 @@ I'm using localhost in these examples, but swap out for your domain (and port, i
 Once that's done, you can add additional "mapping only" users by chopping the `,admin` bit off.
 Or create additional admin users to give them the ability to add other people as well...
 
-Finally, you'll need to set the zero grid, like so:
+The automapper will configure the first location request as 0,0.  You can reset the database to start mapping from a new location by running
 
-    curl --user vendan:hnh "http://localhost/api/admin/setZeroGrid?gridId=<GridID>"
-    
-Then I'd suggest restarting your client, and everything should start working!
+
+    curl --user vendan:hnh "http://localhost/api/admin/wipe"
