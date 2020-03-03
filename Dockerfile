@@ -29,6 +29,5 @@ WORKDIR /hnh-map
 
 COPY --from=gobuilder /hnh-map/hnh-map ./
 COPY --from=frontendbuilder /frontend/dist ./frontend
-COPY templates ./templates
 
 CMD /hnh-map/hnh-map -grids=/map
