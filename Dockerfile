@@ -1,23 +1,33 @@
-FROM golang:alpine as builder
+FROM golang:alpine as gobuilder
 
 RUN mkdir /hnh-map
-
 WORKDIR /hnh-map
 
-ADD go.mod go.sum ./
+COPY go.mod go.sum ./
+RUN go mod download
 
-ADD . .
-
+COPY . .
 RUN go build
+
+FROM alpine as frontendbuilder
+
+RUN mkdir /frontend
+WORKDIR /frontend
+
+RUN apk add --no-cache npm
+
+COPY frontend/package.json .
+RUN npm install
+
+COPY frontend/ ./
+RUN npm run build
 
 FROM alpine
 
 RUN mkdir /hnh-map
-
 WORKDIR /hnh-map
 
-COPY --from=builder hnh-map ./
-
-COPY frontend frontend
+COPY --from=gobuilder /hnh-map/hnh-map ./
+COPY --from=frontendbuilder /frontend/dist ./frontend
 
 CMD /hnh-map/hnh-map -grids=/map
