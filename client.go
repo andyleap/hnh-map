@@ -72,6 +72,8 @@ func (m *Map) client(rw http.ResponseWriter, req *http.Request) {
 		m.uploadMarkers(rw, req)
 	case "grids/mapdata_index":
 		m.mapdataIndex(rw, req)
+	case "":
+		http.Redirect(rw, req, "/map/", 302)
 	default:
 		rw.WriteHeader(http.StatusNotFound)
 	}
