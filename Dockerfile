@@ -30,4 +30,5 @@ WORKDIR /hnh-map
 COPY --from=gobuilder /hnh-map/hnh-map ./
 COPY --from=frontendbuilder /frontend/dist ./frontend
 
+EXPOSE 8080
 CMD /hnh-map/hnh-map -grids=/map
