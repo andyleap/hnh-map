@@ -1,0 +1,152 @@
+package main
+
+import (
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"net/http"
+	"time"
+
+	"go.etcd.io/bbolt"
+	"golang.org/x/crypto/bcrypt"
+)
+
+func (m *Map) index(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil {
+		http.Redirect(rw, req, "/login", 302)
+		return
+	}
+	
+	tokens := []string{}
+	m.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("users"))
+		if b == nil {
+			return nil
+		}
+		uRaw := b.Get([]byte(s.Username))
+		if uRaw == nil {
+			return nil
+		}
+		u := User{}
+		json.Unmarshal(uRaw, &u)
+		tokens = u.Tokens
+		return nil
+	})
+
+	m.ExecuteTemplate(rw, "index.tmpl", struct {
+		Session      *Session
+		UploadTokens []string
+	}{
+		Session: s,
+		UploadTokens: tokens,
+	})
+}
+
+func (m *Map) login(rw http.ResponseWriter, req *http.Request) {
+	if req.Method == "POST" {
+		auths := m.getAuth(req.FormValue("user"), req.FormValue("pass"))
+		if len(auths) > 0 {
+			session := make([]byte, 32)
+			rand.Read(session)
+			http.SetCookie(rw, &http.Cookie{
+				Name:    "session",
+				Expires: time.Now().Add(time.Hour * 24 * 7),
+				Value:   hex.EncodeToString(session),
+			})
+			m.sessmu.Lock()
+			defer m.sessmu.Unlock()
+			m.sessions[hex.EncodeToString(session)] = &Session{
+				Username: req.FormValue("user"),
+				Auths:    auths,
+			}
+			http.Redirect(rw, req, "/", 302)
+			return
+		}
+	}
+	m.ExecuteTemplate(rw, "login.tmpl", nil)
+}
+
+func (m *Map) generateToken(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_UPLOAD) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+	tokenRaw := make([]byte, 16)
+	_, err := rand.Read(tokenRaw)
+	if err != nil {
+		rw.WriteHeader(500)
+		return
+	}
+	token := hex.EncodeToString(tokenRaw)
+	m.db.Update(func(tx *bbolt.Tx) error {
+		ub, err := tx.CreateBucketIfNotExists([]byte("users"))
+		if err != nil {
+			return err
+		}
+		uRaw := ub.Get([]byte(s.Username))
+		if uRaw == nil {
+			return nil
+		}
+		u := User{}
+		err = json.Unmarshal(uRaw, &u)
+		if err != nil {
+			return err
+		}
+		u.Tokens = append(u.Tokens, token)
+		buf, err := json.Marshal(u)
+		if err != nil {
+			return err
+		}
+		err = ub.Put([]byte(s.Username), buf)
+		if err != nil {
+			return err
+		}
+		b, err := tx.CreateBucketIfNotExists([]byte("tokens"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte(token), []byte(s.Username))
+	})
+	http.Redirect(rw, req, "/", 302)
+}
+
+func (m *Map) changePassword(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+
+	if req.Method == "POST" {
+		req.ParseForm()
+		password := req.FormValue("pass")
+		m.db.Update(func(tx *bbolt.Tx) error {
+			users, err := tx.CreateBucketIfNotExists([]byte("users"))
+			if err != nil {
+				return err
+			}
+			u := User{}
+			raw := users.Get([]byte(s.Username))
+			if raw != nil {
+				json.Unmarshal(raw, &u)
+			}
+			if password != "" {
+				u.Pass, _ = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+			}
+			raw, _ = json.Marshal(u)
+			users.Put([]byte(s.Username), raw)
+			return nil
+		})
+		http.Redirect(rw, req, "/", 302)
+	}
+
+	m.ExecuteTemplate(rw, "password.tmpl", struct {
+		Session  *Session
+		User     User
+		Username string
+	}{
+		Session:  s,
+	})
+}

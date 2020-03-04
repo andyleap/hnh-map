@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"image"
@@ -9,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +19,63 @@ import (
 
 	"go.etcd.io/bbolt"
 )
+
+var clientPath = regexp.MustCompile("client/([^/]+)/(.*)")
+
+var UserInfo struct{}
+
+func (m *Map) client(rw http.ResponseWriter, req *http.Request) {
+	matches := clientPath.FindStringSubmatch(req.URL.Path)
+	auth := false
+	user := ""
+	m.db.View(func(tx *bbolt.Tx) error {
+		tb := tx.Bucket([]byte("tokens"))
+		if tb == nil {
+			return nil
+		}
+		userName := tb.Get([]byte(matches[1]))
+		if userName == nil {
+			return nil
+		}
+		ub := tx.Bucket([]byte("users"))
+		if ub == nil {
+			return nil
+		}
+		userRaw := ub.Get(userName)
+		if userRaw == nil {
+			return nil
+		}
+		u := User{}
+		json.Unmarshal(userRaw, &u)
+		if u.Auths.Has(AUTH_UPLOAD) {
+			user = string(userName)
+			auth = true
+		}
+		return nil
+	})
+	if !auth {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	ctx := context.WithValue(req.Context(), UserInfo, user)
+	req = req.WithContext(ctx)
+
+	switch matches[2] {
+	case "api/v1/locate":
+		m.locate(rw, req)
+	case "api/v2/updateGrid":
+		m.uploadMinimap(rw, req)
+	case "api/v2/updateCharacter":
+		m.updateChar(rw, req)
+	case "api/v1/uploadMarkers":
+		m.uploadMarkers(rw, req)
+	case "grids/mapdata_index":
+		m.mapdataIndex(rw, req)
+	default:
+		rw.WriteHeader(http.StatusNotFound)
+	}
+}
 
 func (m *Map) updateChar(rw http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
@@ -58,6 +117,10 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		return
 	}
+	user, ok := req.Context().Value(UserInfo).(string)
+	if !ok {
+		return
+	}
 	m.db.Update(func(tx *bbolt.Tx) error {
 		markersB, err := tx.CreateBucketIfNotExists([]byte("markers"))
 		if err != nil {
@@ -67,6 +130,7 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			return err
 		}
+		ms := []Marker{}
 		for _, mraw := range markers {
 			gridRaw := grids.Get([]byte(strconv.Itoa(mraw.GridID)))
 			grid := GridData{}
@@ -89,9 +153,10 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 				},
 				Image: mraw.Image,
 			}
-			raw, _ := json.Marshal(m)
-			markersB.Put([]byte(fmt.Sprintf("%d_%d_%d", mraw.GridID, mraw.X, mraw.Y)), raw)
+			ms = append(ms, m)
 		}
+		raw, _ := json.Marshal(ms)
+		markersB.Put([]byte(user), raw)
 		return nil
 	})
 }

@@ -1,0 +1,47 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<style>
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<a class="waves-effect waves-light btn modal-trigger" href="#wipe">Wipe!</a>
+            <div id="wipe" class="modal">
+                <div class="modal-content">
+                <h4>Wipe</h4>
+                <p>This will remove all grids and markers, and reset the 0,0 grid</p>
+                <h5>THIS CANNOT BE UNDONE!</h5>
+                </div>
+                <div class="modal-footer">
+                <a href="#!" class="modal-close waves-effect waves-green btn">Cancel</a>
+                <a href="/admin/wipe" class="waves-effect waves-red btn">WIPE</a>
+                </div>
+            </div>
+			<table>
+                <thead>
+                    <tr>
+                        <th>User</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Users}}
+                    <tr>
+                        <td>{{.}}</td>
+                        <td><a href="/admin/user?user={{.}}" class="waves-effect waves-light btn">Edit</a></td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+            <a href="/admin/user" class="waves-effect waves-light btn">Add user</a>
+
+		</div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <script>M.AutoInit();</script>
+	</body>
+</html>

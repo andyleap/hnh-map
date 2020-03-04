@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<style>
+		</style>
+	</head>
+	<body>
+		<div class="container">
+            <form method="POST">
+                <div class="row">
+                    <div class="input-field col s6">
+                        <input id="username" type="text" class="validate" name="user"{{if ne .Username ""}} value="{{.Username}}" disabled{{end}}>
+                        <label for="username">Username</label>
+                    </div>
+                    <div class="input-field col s6">
+                        <input id="password" type="password" class="validate" name="pass">
+                        <label for="password">Password</label>
+                    </div>
+                </div>
+                <div class="col s12">
+                    <ul class="collection with-header">
+                        <li class="collection-header">
+                            <h6>Roles</h6>
+                        </li>
+                        <li class="collection-item">
+                            <label>
+                                <input type="checkbox" name="auths" value="map"{{if .User.Auths.Has "map"}} checked="checked"{{end}}/>
+                                <span>Map</span>
+                            </label>
+                        </li>
+                        <li class="collection-item">
+                            <label>
+                                <input type="checkbox" name="auths" value="upload"{{if .User.Auths.Has "upload"}} checked="checked"{{end}}/>
+                                <span>Upload</span>
+                            </label>
+                        </li>
+                        <li class="collection-item">
+                            <label>
+                                <input type="checkbox" name="auths" value="admin"{{if .User.Auths.Has "admin"}} checked="checked"{{end}}/>
+                                <span>Admin</span>
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+                <button class="btn waves-effect waves-light" type="submit" name="action">Save</button>
+            </form>
+		</div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <script>M.AutoInit();</script>
+	</body>
+</html>

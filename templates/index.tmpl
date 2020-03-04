@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<style>
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="row">
+			<div class="col s3">
+			{{if .Session.Auths.Has "map" }}<a class="waves-effect waves-light btn-large" href="/map">Map</a><br>{{end}}
+			{{if .Session.Auths.Has "admin" }}<a class="waves-effect waves-light btn" href="/admin">Admin portal</a><br>{{end}}
+			<a class="waves-effect waves-light btn" href="/password">Change Password</a><br>
+			</div>
+			<div class="col s9">
+			{{if .Session.Auths.Has "upload" }}
+				<ul class="collection with-header">
+				<li class="collection-header">Here are your existing upload tokens.</li>
+				{{range .UploadTokens}}
+					<li class="collection-item">{{.}}</li>
+				{{else}}
+					<li class="collection-item">You have no tokens, generate one now!</li>
+				{{end}}
+				</ul>
+				Use these tokens in the url for your client, like so: http://example.com/client/&lt;token&gt;<br>
+				<a class="waves-effect waves-light btn" href="/generateToken">Generate Token</a>
+			{{end}}
+			</div>
+			</div>
+		</div>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+	</body>
+</html>

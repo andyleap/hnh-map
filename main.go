@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
+	"github.com/andyleap/hnh-map/webapp"
 
+	"golang.org/x/crypto/bcrypt"
 	"go.etcd.io/bbolt"
 )
 
@@ -20,6 +22,16 @@ type Map struct {
 
 	characters map[string]Character
 	chmu       sync.RWMutex
+
+	sessions map[string]*Session
+	sessmu sync.RWMutex
+
+	*webapp.WebApp
+}
+
+type Session struct {
+	Username string
+	Auths Auths
 }
 
 var (
@@ -38,27 +50,52 @@ func main() {
 		db:          db,
 
 		characters: map[string]Character{},
+
+		sessions: map[string]*Session{},
+
+		WebApp: webapp.Must(webapp.New().LoadTemplates("./templates/")),
+	}
+
+	err = db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			return err
+		}
+		vraw := b.Get([]byte("version"))
+		v, _ := strconv.Atoi(string(vraw))
+		for _, f := range migrations[v:] {
+			err = f(tx)
+			if err != nil {
+				return err
+			}
+		}
+		return b.Put([]byte("version"), []byte(strconv.Itoa(len(migrations))))
+	})
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	go m.cleanChars()
 
 	// Mapping client endpoints
-	http.HandleFunc("/api/v1/locate", m.locate)
-	http.HandleFunc("/api/v2/updateGrid", m.uploadMinimap)
-	http.HandleFunc("/api/v2/updateCharacter", m.updateChar)
-	http.HandleFunc("/api/v1/uploadMarkers", m.uploadMarkers)
-	http.HandleFunc("/grids/mapdata_index", m.mapdataIndex)
+	http.HandleFunc("/client/", m.client)
 
-	// Map frontend endpoints
-	http.HandleFunc("/api/v1/characters", m.getChars)
-	http.HandleFunc("/api/v1/markers", m.getMarkers)
+	http.HandleFunc("/login", m.login)
+	http.HandleFunc("/", m.index)
+	http.HandleFunc("/generateToken", m.generateToken)
+	http.HandleFunc("/password", m.changePassword)
 
 	// Admin endpoints
-	http.HandleFunc("/api/admin/wipe", m.wipe)
-	http.HandleFunc("/api/admin/setUser", m.setUser)
+	http.HandleFunc("/admin", m.admin)
+	http.HandleFunc("/admin/user", m.adminUser)
+	http.HandleFunc("/admin/wipe", m.wipe)
+	//http.HandleFunc("/api/setUser", m.setUser)
 
-	http.Handle("/grids/", http.StripPrefix("/grids", http.FileServer(http.Dir(m.gridStorage))))
-	http.Handle("/", http.FileServer(http.Dir("frontend")))
+	// Map frontend endpoints
+	http.HandleFunc("/map/api/v1/characters", m.getChars)
+	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
+	http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
+	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
@@ -118,6 +155,17 @@ const (
 type User struct {
 	Pass  []byte
 	Auths Auths
+	Tokens []string
+}
+
+func (m *Map) getSession(req *http.Request) *Session {
+	m.sessmu.RLock()
+	defer m.sessmu.RUnlock()
+	c, err := req.Cookie("session")
+	if err != nil {
+		return nil
+	}
+	return m.sessions[c.Value]
 }
 
 func (m *Map) getAuth(user, pass string) Auths {
