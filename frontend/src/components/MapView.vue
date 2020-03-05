@@ -103,6 +103,8 @@
                 // Create map and layer
                 this.map = L.map(this.$refs.map, {
                     // Map setup
+                    minZoom: HnHMinZoom,
+                    maxZoom: HnHMaxZoom,
                     crs: HnHCRS,
 
                     // Disable all visuals
