@@ -17,8 +17,9 @@ func (m *Map) index(rw http.ResponseWriter, req *http.Request) {
 		http.Redirect(rw, req, "/login", 302)
 		return
 	}
-	
+
 	tokens := []string{}
+	prefix := "http://example.com"
 	m.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		if b == nil {
@@ -31,15 +32,22 @@ func (m *Map) index(rw http.ResponseWriter, req *http.Request) {
 		u := User{}
 		json.Unmarshal(uRaw, &u)
 		tokens = u.Tokens
+
+		config := tx.Bucket([]byte("config"))
+		if config != nil {
+			prefix = string(config.Get([]byte("prefix")))
+		}
 		return nil
 	})
 
 	m.ExecuteTemplate(rw, "index.tmpl", struct {
 		Session      *Session
 		UploadTokens []string
+		Prefix         string
 	}{
-		Session: s,
+		Session:      s,
 		UploadTokens: tokens,
+		Prefix:       prefix,
 	})
 }
 
@@ -147,6 +155,6 @@ func (m *Map) changePassword(rw http.ResponseWriter, req *http.Request) {
 		User     User
 		Username string
 	}{
-		Session:  s,
+		Session: s,
 	})
 }

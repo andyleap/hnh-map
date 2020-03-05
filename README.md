@@ -15,16 +15,7 @@ point your auto-mapping supported client at it (like Purus pasta)
 
 Only other thing you need to do is setup users and set your zero grid.
 
-By default, the only user is an "admin only" with username and password equal to "admin"
-Create your own admin account like so:
+Simply login as username admin, password admin, go to the admin portal, and hit "ADD USER".  Don't forget to toggle on all the roles (you'll need admin, at least)
 
-    curl --user admin:admin "http://localhost/api/admin/setUser?user=vendan&pass=hnh&auths=map,admin"
-    
-I'm using localhost in these examples, but swap out for your domain (and port, if applicable), of course.  
-Once that's done, you can add additional "mapping only" users by chopping the `,admin` bit off.
-Or create additional admin users to give them the ability to add other people as well...
-
-The automapper will configure the first location request as 0,0.  You can reset the database to start mapping from a new location by running
-
-
-    curl --user vendan:hnh "http://localhost/api/admin/wipe"
+Once you create your first user, you'll get kicked out and have to log in as it.
+The admin user will be gone at this point.  Next you'll want to add users for anyone else, and then you'll need to create your tokens to upload stuff

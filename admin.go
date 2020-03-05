@@ -18,11 +18,15 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	users := []string{}
-
+	prefix := ""
 	m.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		if b == nil {
 			return nil
+		}
+		config := tx.Bucket([]byte("config"))
+		if config != nil {
+			prefix = string(config.Get([]byte("prefix")))
 		}
 		return b.ForEach(func(k, v []byte) error {
 			users = append(users, string(k))
@@ -33,9 +37,11 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 	m.ExecuteTemplate(rw, "admin/index.tmpl", struct {
 		Session *Session
 		Users   []string
+		Prefix  string
 	}{
 		Session: s,
 		Users:   users,
+		Prefix:  prefix,
 	})
 }
 
@@ -127,5 +133,21 @@ func (m *Map) wipe(rw http.ResponseWriter, req *http.Request) {
 	for z := 0; z <= 5; z++ {
 		os.RemoveAll(fmt.Sprintf("%s/%d", m.gridStorage, z))
 	}
-	http.Redirect(rw, req, "/", 302)
+	http.Redirect(rw, req, "/admin/", 302)
+}
+
+func (m *Map) setPrefix(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+	m.db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("prefix"), []byte(req.FormValue("prefix")))
+	})
+	http.Redirect(rw, req, "/admin/", 302)
 }

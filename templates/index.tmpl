@@ -21,12 +21,11 @@
 				<ul class="collection with-header">
 				<li class="collection-header">Here are your existing upload tokens.</li>
 				{{range .UploadTokens}}
-					<li class="collection-item">{{.}}</li>
+					<li class="collection-item">{{$.Prefix}}/client/{{.}}</li>
 				{{else}}
 					<li class="collection-item">You have no tokens, generate one now!</li>
 				{{end}}
 				</ul>
-				Use these tokens in the url for your client, like so: http://example.com/client/&lt;token&gt;<br>
 				<a class="waves-effect waves-light btn" href="/generateToken">Generate Token</a>
 			{{end}}
 			</div>

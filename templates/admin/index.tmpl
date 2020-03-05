@@ -10,18 +10,7 @@
 	</head>
 	<body>
 		<div class="container">
-			<a class="waves-effect waves-light btn modal-trigger" href="#wipe">Wipe!</a>
-            <div id="wipe" class="modal">
-                <div class="modal-content">
-                <h4>Wipe</h4>
-                <p>This will remove all grids and markers, and reset the 0,0 grid</p>
-                <h5>THIS CANNOT BE UNDONE!</h5>
-                </div>
-                <div class="modal-footer">
-                <a href="#!" class="modal-close waves-effect waves-green btn">Cancel</a>
-                <a href="/admin/wipe" class="waves-effect waves-red btn">WIPE</a>
-                </div>
-            </div>
+			
 			<table>
                 <thead>
                     <tr>
@@ -39,7 +28,40 @@
                 </tbody>
             </table>
             <a href="/admin/user" class="waves-effect waves-light btn">Add user</a>
-
+            <br>
+            <div class="card">
+                <div class="card-content">
+                    <h5>Set prefix for tokens</h5>
+                    <p>This is used for making the client tokens a "copy/paste" straight into client</p>
+                    <form action="/admin/setPrefix" method="POST">
+                    <div class="row">
+                        <div class="input-field col s6">
+                            <input id="prefix" type="text" class="validate" name="prefix" value="{{.Prefix}}">
+                            <label for="prefix">Prefix</label>
+                        </div>
+                        <div class="input-field col s6">
+                            <button class="btn waves-effect waves-light" type="submit" name="action">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-content">
+                    <h5>Wipe all data</h5>
+                    <a class="waves-effect waves-light btn modal-trigger" href="#wipe">Wipe!</a>
+                    <div id="wipe" class="modal">
+                        <div class="modal-content">
+                        <h4>Wipe</h4>
+                        <p>This will remove all grids and markers, and reset the 0,0 grid</p>
+                        <h5>THIS CANNOT BE UNDONE!</h5>
+                        </div>
+                        <div class="modal-footer">
+                        <a href="#!" class="modal-close waves-effect waves-green btn">Cancel</a>
+                        <a href="/admin/wipe" class="waves-effect waves-red btn">WIPE</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
 		</div>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
         <script>M.AutoInit();</script>

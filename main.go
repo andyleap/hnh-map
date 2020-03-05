@@ -84,12 +84,14 @@ func main() {
 	http.HandleFunc("/", m.index)
 	http.HandleFunc("/generateToken", m.generateToken)
 	http.HandleFunc("/password", m.changePassword)
+	
 
 	// Admin endpoints
 	http.HandleFunc("/admin", m.admin)
 	http.HandleFunc("/admin/user", m.adminUser)
 	http.HandleFunc("/admin/wipe", m.wipe)
-	//http.HandleFunc("/api/setUser", m.setUser)
+	http.HandleFunc("/admin/setPrefix", m.setPrefix)
+	
 
 	// Map frontend endpoints
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
