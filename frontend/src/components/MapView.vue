@@ -20,7 +20,7 @@
                 </div>
                 <div class="form-group">
                     <label>Jump to Player</label>
-                    <model-select :options="players" v-model="zz" placeholder="Select Player"></model-select>
+                    <model-select :options="players" v-model="selectedPlayer" placeholder="Select Player"></model-select>
                 </div>
             </div>
         </div>
@@ -29,7 +29,7 @@
 
 <script>
     import {ModelSelect} from 'vue-search-select'
-    import {CustomGridLayer, HnHCRS, HnHMaxZoom, HnHMinZoom, TileSize} from "../utils/LeafletCustomTypes";
+    import {GridCoordLayer, HnHCRS, HnHMaxZoom, HnHMinZoom, TileSize} from "../utils/LeafletCustomTypes";
     import {SmartTileLayer} from "../utils/SmartTileLayer";
     import * as L from "leaflet";
     import {API_ENDPOINT} from "../main";
@@ -53,12 +53,17 @@
                 markersCache: [],
                 questGivers: [],
                 players: [],
-                selectedMarker: {value: false}
+                selectedMarker: {value: false},
+                selectedPlayer: {value: false}
             }
         },
         watch: {
             showGridCoordinates(value) {
-                this.layer.showGridCoordinates(value);
+                if(value) {
+                    this.coordLayer.setOpacity(1);
+                } else {
+                    this.coordLayer.setOpacity(0);
+                }
             },
             trackingCharacterId(value) {
                 if (value !== -1) {
@@ -77,6 +82,11 @@
             selectedMarker(value) {
                 if (value) {
                     this.map.setView(value.marker.getLatLng(), this.map.getZoom());
+                }
+            },
+            selectedPlayer(value) {
+                if (value && value.id) {
+                    this.trackingCharacterId = value.id;
                 }
             }
         },
@@ -121,9 +131,12 @@
                     }
                 });
          
-                this.layer = new SmartTileLayer('grids/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: 100});
+                this.layer = new SmartTileLayer('grids/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: TileSize});
                 this.layer.invalidTile = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
                 this.layer.addTo(this.map);
+                
+                this.coordLayer = new GridCoordLayer({tileSize: TileSize, opacity: 0});
+                this.coordLayer.addTo(this.map);
 
                 var source = new EventSource("updates");
                 source.onmessage = (function(event) {

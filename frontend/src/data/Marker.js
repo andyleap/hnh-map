@@ -26,7 +26,7 @@ export class Marker {
     }
 
     add(map) {
-        let icon = new ImageIcon({iconUrl: `/${this.image}.png`});
+        let icon = new ImageIcon({iconUrl: `${this.image}.png`});
         let position = map.unproject([this.position.x, this.position.y], HnHMaxZoom);
         this.marker = L.marker(position, {icon: icon, title: this.name});
         this.marker.addTo(map)
