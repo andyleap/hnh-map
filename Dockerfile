@@ -1,4 +1,4 @@
-FROM golang:alpine as gobuilder
+FROM golang:1.13-alpine as gobuilder
 
 RUN mkdir /hnh-map
 WORKDIR /hnh-map
