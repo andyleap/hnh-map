@@ -12,8 +12,8 @@ import (
 
 	"github.com/andyleap/hnh-map/webapp"
 
-	"golang.org/x/crypto/bcrypt"
 	"go.etcd.io/bbolt"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Map struct {
@@ -24,14 +24,16 @@ type Map struct {
 	chmu       sync.RWMutex
 
 	sessions map[string]*Session
-	sessmu sync.RWMutex
+	sessmu   sync.RWMutex
 
 	*webapp.WebApp
+
+	gridUpdates topic
 }
 
 type Session struct {
 	Username string
-	Auths Auths
+	Auths    Auths
 }
 
 var (
@@ -84,19 +86,21 @@ func main() {
 	http.HandleFunc("/", m.index)
 	http.HandleFunc("/generateToken", m.generateToken)
 	http.HandleFunc("/password", m.changePassword)
-	
 
 	// Admin endpoints
 	http.HandleFunc("/admin", m.admin)
 	http.HandleFunc("/admin/user", m.adminUser)
 	http.HandleFunc("/admin/wipe", m.wipe)
 	http.HandleFunc("/admin/setPrefix", m.setPrefix)
-	
+	http.HandleFunc("/admin/rebuildZooms", m.rebuildZooms)
 
 	// Map frontend endpoints
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
 	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
-	http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
+	http.HandleFunc("/map/updates", m.watchGridUpdates)
+	http.HandleFunc("/map/grids/", m.gridTile)
+	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
+
 	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -137,6 +141,19 @@ func (c Coord) Name() string {
 	return fmt.Sprintf("%d_%d.png", c.X, c.Y)
 }
 
+func (c Coord) Parent() Coord {
+	if c.X < 0 {
+		c.X--
+	}
+	if c.Y < 0 {
+		c.Y--
+	}
+	return Coord{
+		X: c.X / 2,
+		Y: c.Y / 2,
+	}
+}
+
 type Auths []string
 
 func (a Auths) Has(auth string) bool {
@@ -155,8 +172,8 @@ const (
 )
 
 type User struct {
-	Pass  []byte
-	Auths Auths
+	Pass   []byte
+	Auths  Auths
 	Tokens []string
 }
 

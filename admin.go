@@ -151,3 +151,37 @@ func (m *Map) setPrefix(rw http.ResponseWriter, req *http.Request) {
 	})
 	http.Redirect(rw, req, "/admin/", 302)
 }
+
+func (m *Map) rebuildZooms(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+	needProcess := map[Coord]struct{}{}
+
+	m.db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("grids"))
+		if err != nil {
+			return err
+		}
+		b.ForEach(func(k, v []byte) error {
+			grid := GridData{}
+			json.Unmarshal(v, &grid)
+			needProcess[grid.Coord.Parent()] = struct{}{}
+			return nil
+		})
+		return nil
+	})
+
+	for z := 1; z <= 5; z++ {
+		os.RemoveAll(fmt.Sprintf("%s/%d", m.gridStorage, z))
+		process := needProcess
+		needProcess = map[Coord]struct{}{}
+		for c := range process {
+			m.updateZoomLevel(c, z)
+			needProcess[c.Parent()] = struct{}{}
+		}
+	}
+	http.Redirect(rw, req, "/admin/", 302)
+}

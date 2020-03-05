@@ -30,6 +30,7 @@
 <script>
     import {ModelSelect} from 'vue-search-select'
     import {CustomGridLayer, HnHCRS, HnHMaxZoom, HnHMinZoom, TileSize} from "../utils/LeafletCustomTypes";
+    import {SmartTileLayer} from "../utils/SmartTileLayer";
     import * as L from "leaflet";
     import {API_ENDPOINT} from "../main";
     import {Marker} from "../data/Marker";
@@ -92,21 +93,19 @@
                 // Create map and layer
                 this.map = L.map(this.$refs.map, {
                     // Map setup
-                    minZoom: HnHMinZoom,
-                    maxZoom: HnHMaxZoom,
                     crs: HnHCRS,
 
                     // Disable all visuals
                     attributionControl: false,
-                    inertia: false,
-                    zoomAnimation: false,
-                    fadeAnimation: false,
-                    markerZoomAnimation: false
+                    inertia: true,
+                    zoomAnimation: true,
+                    fadeAnimation: true,
+                    markerZoomAnimation: true
                 });
 
                 // Update url on manual drag, zoom
                 this.map.on("drag", () => {
-                    let point = this.map.project(this.map.getCenter(), this.map.getZoom());
+                    let point = this.map.project(this.map.getCenter(), 6);
                     let coordinate = {x: ~~(point.x / TileSize), y: ~~(point.y / TileSize), z: this.map.getZoom()};
                     this.$router.replace({path: `/grid/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
                     this.trackingCharacterId = -1;
@@ -115,15 +114,26 @@
                     if (this.autoMode) {
                         this.autoMode = false;
                     } else {
-                        let point = this.map.project(this.map.getCenter(), this.map.getZoom());
+                        let point = this.map.project(this.map.getCenter(), 6);
                         let coordinate = {x: ~~(point.x / TileSize), y: ~~(point.y / TileSize), z: this.map.getZoom()};
                         this.$router.replace({path: `/grid/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
                         this.trackingCharacterId = -1;
                     }
                 });
-
-                this.layer = new CustomGridLayer({tileSize: TileSize});
+         
+                this.layer = new SmartTileLayer('grids/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: 100});
+                this.layer.invalidTile = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
                 this.layer.addTo(this.map);
+
+                var source = new EventSource("updates");
+                source.onmessage = (function(event) {
+                    var updates = JSON.parse(event.data);
+                    for(var update of updates) {
+                        var key = update['X'] + ':' + update['Y'] + ':' + update['Z'];
+                        this.layer.cache[key] = update['T'];
+                        this.layer.refresh(update['X'], update['Y'], update['Z']);
+                    }
+                }).bind(this);
 
                 this.markers = new UniqueList();
                 this.characters = new UniqueList();

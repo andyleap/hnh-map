@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -257,13 +258,15 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	updateTile := false
+	cur := GridData{}
+
 	m.db.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("grids"))
 		if err != nil {
 			return err
 		}
 		curRaw := b.Get([]byte(id))
-		cur := GridData{}
 		if curRaw != nil {
 			err := json.Unmarshal(curRaw, &cur)
 			if err != nil {
@@ -278,20 +281,9 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 			cur.Coord.Y = y
 		}
 
-		if time.Now().After(cur.NextUpdate) {
-			os.MkdirAll(fmt.Sprintf("%s/0", m.gridStorage), 0600)
-			f, err := os.Create(fmt.Sprintf("%s/0/%s", m.gridStorage, cur.Coord.Name()))
-			if err != nil {
-				return err
-			}
-			_, err = io.Copy(f, file)
-			if err != nil {
-				f.Close()
-				return err
-			}
-			f.Close()
+		updateTile = time.Now().After(cur.NextUpdate)
 
-			m.updateZooms(cur.Coord)
+		if updateTile {
 			cur.NextUpdate = time.Now().Add(time.Minute * 30)
 		}
 
@@ -303,35 +295,45 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 
 		return nil
 	})
-}
 
-func (m *Map) updateZooms(c Coord) {
-	factor := 1
-	for z := 1; z <= 5; z++ {
-		factor = factor * 2
-		sX := (c.X % factor)
-		if sX < 0 {
-			sX = -sX
+	if updateTile {
+		os.MkdirAll(fmt.Sprintf("%s/0", m.gridStorage), 0600)
+		f, err := os.Create(fmt.Sprintf("%s/0/%s", m.gridStorage, cur.ID))
+		if err != nil {
+			return
 		}
-		c.X = c.X - sX
-		sY := (c.Y % factor)
-		if sY < 0 {
-			sY = -sY
+		_, err = io.Copy(f, file)
+		if err != nil {
+			f.Close()
+			return
 		}
-		c.Y = c.Y - sY
-		m.updateZoomLevel(c, z, factor/2)
+		f.Close()
+
+		m.SaveTile(cur.Coord, 0, fmt.Sprintf("0/%s", cur.ID))
+
+		c := cur.Coord
+		for z := 1; z <= 5; z++ {
+			c = c.Parent()
+			m.updateZoomLevel(c, z)
+		}
 	}
 }
 
-func (m *Map) updateZoomLevel(c Coord, z int, factor int) {
+func (m *Map) updateZoomLevel(c Coord, z int) {
 	img := image.NewNRGBA(image.Rect(0, 0, 100, 100))
 	draw.Draw(img, img.Bounds(), image.Black, image.Point{}, draw.Src)
 	for x := 0; x <= 1; x++ {
 		for y := 0; y <= 1; y++ {
 			subC := c
-			subC.X += x * factor
-			subC.Y += y * factor
-			subf, err := os.Open(fmt.Sprintf("%s/%d/%s", m.gridStorage, z-1, subC.Name()))
+			subC.X *= 2
+			subC.Y *= 2
+			subC.X += x
+			subC.Y += y
+			td := m.GetTile(subC, z-1)
+			if td == nil {
+				continue
+			}
+			subf, err := os.Open(filepath.Join(m.gridStorage, td.File))
 			if err != nil {
 				continue
 			}
@@ -345,9 +347,12 @@ func (m *Map) updateZoomLevel(c Coord, z int, factor int) {
 	}
 	os.MkdirAll(fmt.Sprintf("%s/%d", m.gridStorage, z), 0600)
 	f, err := os.Create(fmt.Sprintf("%s/%d/%s", m.gridStorage, z, c.Name()))
+	m.SaveTile(c, z, fmt.Sprintf("%d/%s", z, c.Name()))
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() {
+		f.Close()
+	}()
 	png.Encode(f, img)
 }
