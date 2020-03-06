@@ -70,8 +70,14 @@ type TileCache struct {
 }
 
 func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_MAP) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
+	rw.Header().Set("'X-Accel-Buffering", "no")
 
 	flusher, ok := rw.(http.Flusher)
 
@@ -147,6 +153,11 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 var tileRegex = regexp.MustCompile("([0-9]+)/([-0-9]+)_([-0-9]+).png")
 
 func (m *Map) gridTile(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_MAP) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
 	tile := tileRegex.FindStringSubmatch(req.URL.Path)
 	z, err := strconv.Atoi(tile[1])
 	if err != nil {
