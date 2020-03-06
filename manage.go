@@ -128,7 +128,7 @@ func (m *Map) generateToken(rw http.ResponseWriter, req *http.Request) {
 
 func (m *Map) changePassword(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
-	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+	if s == nil {
 		http.Redirect(rw, req, "/", 302)
 		return
 	}
