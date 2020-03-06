@@ -132,6 +132,7 @@ func (m *Map) wipe(rw http.ResponseWriter, req *http.Request) {
 	m.db.Update(func(tx *bbolt.Tx) error {
 		tx.DeleteBucket([]byte("grids"))
 		tx.DeleteBucket([]byte("markers"))
+		tx.DeleteBucket([]byte("tiles"))
 		return nil
 	})
 	for z := 0; z <= 5; z++ {
