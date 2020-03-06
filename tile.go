@@ -77,7 +77,7 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 	}
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
-	rw.Header().Set("'X-Accel-Buffering", "no")
+	rw.Header().Set("X-Accel-Buffering", "no")
 
 	flusher, ok := rw.(http.Flusher)
 
