@@ -8,6 +8,10 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+type Config struct {
+	Title string `json:"title"`
+}
+
 func (m *Map) getChars(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
 	if s == nil || !s.Auths.Has(AUTH_MAP) {
@@ -51,4 +55,23 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 		return nil
 	})
 	json.NewEncoder(rw).Encode(markers)
+}
+
+func (m *Map) config(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_MAP) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	config := Config{}
+	m.db.View(func(tx *bbolt.Tx) error {
+		b := tx.Bucket([]byte("config"))
+		if b == nil {
+			return nil
+		}
+		title := b.Get([]byte("title"))
+		config.Title = string(title)
+		return nil
+	})
+	json.NewEncoder(rw).Encode(config)
 }

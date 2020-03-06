@@ -41,10 +41,12 @@ func (m *Map) index(rw http.ResponseWriter, req *http.Request) {
 	})
 
 	m.ExecuteTemplate(rw, "index.tmpl", struct {
+		Page         Page
 		Session      *Session
 		UploadTokens []string
-		Prefix         string
+		Prefix       string
 	}{
+		Page:         m.getPage(req),
 		Session:      s,
 		UploadTokens: tokens,
 		Prefix:       prefix,
@@ -72,7 +74,11 @@ func (m *Map) login(rw http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	m.ExecuteTemplate(rw, "login.tmpl", nil)
+	m.ExecuteTemplate(rw, "login.tmpl", struct {
+		Page Page
+	}{
+		Page: m.getPage(req),
+	})
 }
 
 func (m *Map) generateToken(rw http.ResponseWriter, req *http.Request) {
@@ -151,10 +157,10 @@ func (m *Map) changePassword(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	m.ExecuteTemplate(rw, "password.tmpl", struct {
-		Session  *Session
-		User     User
-		Username string
+		Page    Page
+		Session *Session
 	}{
+		Page:    m.getPage(req),
 		Session: s,
 	})
 }

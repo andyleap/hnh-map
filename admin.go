@@ -35,10 +35,12 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 	})
 
 	m.ExecuteTemplate(rw, "admin/index.tmpl", struct {
+		Page    Page
 		Session *Session
 		Users   []string
 		Prefix  string
 	}{
+		Page:    m.getPage(req),
 		Session: s,
 		Users:   users,
 		Prefix:  prefix,
@@ -109,10 +111,12 @@ func (m *Map) adminUser(rw http.ResponseWriter, req *http.Request) {
 	})
 
 	m.ExecuteTemplate(rw, "admin/user.tmpl", struct {
+		Page     Page
 		Session  *Session
 		User     User
 		Username string
 	}{
+		Page:     m.getPage(req),
 		Session:  s,
 		User:     u,
 		Username: user,
@@ -148,6 +152,22 @@ func (m *Map) setPrefix(rw http.ResponseWriter, req *http.Request) {
 			return err
 		}
 		return b.Put([]byte("prefix"), []byte(req.FormValue("prefix")))
+	})
+	http.Redirect(rw, req, "/admin/", 302)
+}
+
+func (m *Map) setTitle(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+	m.db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("title"), []byte(req.FormValue("title")))
 	})
 	http.Redirect(rw, req, "/admin/", 302)
 }

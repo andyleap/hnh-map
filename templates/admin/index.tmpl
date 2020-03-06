@@ -47,6 +47,21 @@
             </div>
             <div class="card">
                 <div class="card-content">
+                    <h5>Set title for pages</h5>
+                    <form action="/admin/setTitle" method="POST">
+                    <div class="row">
+                        <div class="input-field col s6">
+                            <input id="title" type="text" class="validate" name="title" value="{{.Page.Title}}">
+                            <label for="title">Title</label>
+                        </div>
+                        <div class="input-field col s6">
+                            <button class="btn waves-effect waves-light" type="submit" name="action">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-content">
                     <h5>Wipe all data</h5>
                     <a class="waves-effect waves-light btn modal-trigger" href="#wipe">Wipe!</a>
                     <div id="wipe" class="modal">

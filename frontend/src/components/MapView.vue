@@ -100,6 +100,9 @@
         },
         methods: {
             setupMap(characters) {
+                this.$http.get(`${API_ENDPOINT}/config`).then(response => {
+                    this.processConfig(response.body);
+                }, () => this.$emit("error"));
                 // Create map and layer
                 this.map = L.map(this.$refs.map, {
                     // Map setup
@@ -218,6 +221,9 @@
                 );
                 this.players.length = 0;
                 this.characters.getElements().forEach(it => this.players.push(it));
+            },
+            processConfig(config) {
+                document.title = config.title;
             },
             toLatLng(x, y) {
                 return this.map.unproject([x, y], HnHMaxZoom);

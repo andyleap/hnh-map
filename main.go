@@ -88,15 +88,17 @@ func main() {
 	http.HandleFunc("/password", m.changePassword)
 
 	// Admin endpoints
-	http.HandleFunc("/admin", m.admin)
+	http.HandleFunc("/admin/", m.admin)
 	http.HandleFunc("/admin/user", m.adminUser)
 	http.HandleFunc("/admin/wipe", m.wipe)
 	http.HandleFunc("/admin/setPrefix", m.setPrefix)
+	http.HandleFunc("/admin/setTitle", m.setTitle)
 	http.HandleFunc("/admin/rebuildZooms", m.rebuildZooms)
 
 	// Map frontend endpoints
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
 	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
+	http.HandleFunc("/map/api/config", m.config)
 	http.HandleFunc("/map/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
@@ -185,6 +187,23 @@ func (m *Map) getSession(req *http.Request) *Session {
 		return nil
 	}
 	return m.sessions[c.Value]
+}
+
+type Page struct {
+	Title string `json:"title"`
+}
+
+func (m *Map) getPage(req *http.Request) Page {
+	p := Page{}
+	m.db.View(func(tx *bbolt.Tx) error {
+		c := tx.Bucket([]byte("config"))
+		if c == nil {
+			return nil
+		}
+		p.Title = string(c.Get([]byte("title")))
+		return nil
+	})
+	return p
 }
 
 func (m *Map) getAuth(user, pass string) Auths {

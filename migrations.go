@@ -49,4 +49,11 @@ var migrations = []func(tx *bbolt.Tx) error{
 			return zoom.Put([]byte(g.Coord.Name()), raw)
 		})
 	},
+	func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			return err
+		}
+		return b.Put([]byte("title"), []byte("HnH Automapper Server"))
+	},
 }
