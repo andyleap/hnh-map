@@ -181,10 +181,12 @@ func (m *Map) rebuildZooms(rw http.ResponseWriter, req *http.Request) {
 	}
 	needProcess := map[Coord]struct{}{}
 
+	noGrids := false
 	m.db.Update(func(tx *bbolt.Tx) error {
-		b, err := tx.CreateBucketIfNotExists([]byte("grids"))
-		if err != nil {
-			return err
+		b := tx.Bucket([]byte("grids"))
+		if b == nil {
+			noGrids = true
+			return nil
 		}
 		b.ForEach(func(k, v []byte) error {
 			grid := GridData{}
@@ -194,6 +196,10 @@ func (m *Map) rebuildZooms(rw http.ResponseWriter, req *http.Request) {
 		})
 		return nil
 	})
+
+	if noGrids {
+		return
+	}
 
 	for z := 1; z <= 5; z++ {
 		os.RemoveAll(fmt.Sprintf("%s/%d", m.gridStorage, z))
