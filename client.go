@@ -27,6 +27,10 @@ var UserInfo struct{}
 
 func (m *Map) client(rw http.ResponseWriter, req *http.Request) {
 	matches := clientPath.FindStringSubmatch(req.URL.Path)
+	if matches == nil {
+		http.Error(rw, "Client token not found", http.StatusBadRequest)
+		return
+	}
 	auth := false
 	user := ""
 	m.db.View(func(tx *bbolt.Tx) error {
