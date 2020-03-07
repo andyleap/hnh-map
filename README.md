@@ -23,3 +23,10 @@ The admin user will be gone at this point.  Next you'll want to add users for an
 You'll probably want to set the prefix (this gets put at the front of the tokens, and should be something like `http://example.com`) to make it easier to configure clients.
 
 The first client to connect will set the 0,0 grid, but you can wipe the data in the admin portal to reset (and the next client to connect should set a new 0,0 grid)
+
+Roles
+=====
+
+Map: View the map
+Upload: Send character, marker, and tile data to the server
+Admin: modify server settings, create and edit users, wipe data
