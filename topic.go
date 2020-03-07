@@ -16,11 +16,11 @@ func (t *topic) watch(c chan *TileData) {
 func (t *topic) send(b *TileData) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	for i, c := range t.c {
+	for i := 0; i < len(t.c); i++ {
 		select {
-		case c <- b:
+		case t.c[i] <- b:
 		default:
-			close(c)
+			close(t.c[i])
 			t.c[i] = t.c[len(t.c)-1]
 			t.c = t.c[:len(t.c)-1]
 		}
