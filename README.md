@@ -27,6 +27,6 @@ The first client to connect will set the 0,0 grid, but you can wipe the data in 
 Roles
 =====
 
-Map: View the map
-Upload: Send character, marker, and tile data to the server
-Admin: modify server settings, create and edit users, wipe data
+- Map: View the map
+- Upload: Send character, marker, and tile data to the server
+- Admin: modify server settings, create and edit users, wipe data
