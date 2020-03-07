@@ -123,7 +123,10 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 	ticker := time.NewTicker(5 * time.Second)
 	for {
 		select {
-		case e := <-c:
+		case e, ok := <-c:
+			if !ok {
+				return
+			}
 			found := false
 			for i := range tileCache {
 				if tileCache[i].X == e.Coord.X && tileCache[i].Y == e.Coord.Y && tileCache[i].Z == e.Zoom {
