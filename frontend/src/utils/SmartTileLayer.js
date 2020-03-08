@@ -26,7 +26,7 @@ export const SmartTileLayer = L.TileLayer.extend({
         
         data['cache'] = this.cache[data['x'] + ':' + data['y'] + ':' + data['z']];
 
-        if(!data['cache']) {
+        if(!data['cache'] || data['cache'] == -1) {
             return this.invalidTile;
         }
 

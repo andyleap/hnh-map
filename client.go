@@ -313,7 +313,7 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 		}
 		f.Close()
 
-		m.SaveTile(cur.Coord, 0, fmt.Sprintf("0/%s", cur.ID))
+		m.SaveTile(cur.Coord, 0, fmt.Sprintf("0/%s", cur.ID), time.Now().UnixNano())
 
 		c := cur.Coord
 		for z := 1; z <= 5; z++ {
@@ -334,7 +334,7 @@ func (m *Map) updateZoomLevel(c Coord, z int) {
 			subC.X += x
 			subC.Y += y
 			td := m.GetTile(subC, z-1)
-			if td == nil {
+			if td == nil || td.File == "" {
 				continue
 			}
 			subf, err := os.Open(filepath.Join(m.gridStorage, td.File))
@@ -351,7 +351,7 @@ func (m *Map) updateZoomLevel(c Coord, z int) {
 	}
 	os.MkdirAll(fmt.Sprintf("%s/%d", m.gridStorage, z), 0600)
 	f, err := os.Create(fmt.Sprintf("%s/%d/%s", m.gridStorage, z, c.Name()))
-	m.SaveTile(c, z, fmt.Sprintf("%d/%s", z, c.Name()))
+	m.SaveTile(c, z, fmt.Sprintf("%d/%s", z, c.Name()), time.Now().UnixNano())
 	if err != nil {
 		return
 	}

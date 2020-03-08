@@ -99,6 +99,7 @@ func main() {
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
 	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
 	http.HandleFunc("/map/api/config", m.config)
+	http.HandleFunc("/map/api/admin/wipeTile", m.wipeTile)
 	http.HandleFunc("/map/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))

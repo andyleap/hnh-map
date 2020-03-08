@@ -9,7 +9,8 @@ import (
 )
 
 type Config struct {
-	Title string `json:"title"`
+	Title string   `json:"title"`
+	Auths []string `json:"auths"`
 }
 
 func (m *Map) getChars(rw http.ResponseWriter, req *http.Request) {
@@ -63,7 +64,9 @@ func (m *Map) config(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	config := Config{}
+	config := Config{
+		Auths: s.Auths,
+	}
 	m.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("config"))
 		if b == nil {

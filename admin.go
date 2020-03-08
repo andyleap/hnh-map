@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 
 	"go.etcd.io/bbolt"
 	"golang.org/x/crypto/bcrypt"
@@ -209,6 +211,108 @@ func (m *Map) rebuildZooms(rw http.ResponseWriter, req *http.Request) {
 			m.updateZoomLevel(c, z)
 			needProcess[c.Parent()] = struct{}{}
 		}
+	}
+	http.Redirect(rw, req, "/admin/", 302)
+}
+
+func (m *Map) deleteUser(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+
+	username := req.FormValue("user")
+	m.db.Update(func(tx *bbolt.Tx) error {
+		users, err := tx.CreateBucketIfNotExists([]byte("users"))
+		if err != nil {
+			return err
+		}
+		u := User{}
+		raw := users.Get([]byte(username))
+		if raw != nil {
+			json.Unmarshal(raw, &u)
+		}
+		tokens, err := tx.CreateBucketIfNotExists([]byte("tokens"))
+		if err != nil {
+			return err
+		}
+		for _, tok := range u.Tokens {
+			err = tokens.Delete([]byte(tok))
+			if err != nil {
+				return err
+			}
+		}
+		err = users.Delete([]byte(username))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	if username == s.Username {
+		m.sessmu.Lock()
+		defer m.sessmu.Unlock()
+		s, _ := req.Cookie("session")
+		delete(m.sessions, s.Value)
+	}
+	http.Redirect(rw, req, "/admin", 302)
+	return
+
+}
+
+var errFound = errors.New("found tile")
+
+func (m *Map) wipeTile(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+	xraw := req.FormValue("x")
+	x, err := strconv.Atoi(xraw)
+	if err != nil {
+		http.Error(rw, "coord parse failed", http.StatusBadRequest)
+	}
+	yraw := req.FormValue("y")
+	y, err := strconv.Atoi(yraw)
+	if err != nil {
+		http.Error(rw, "coord parse failed", http.StatusBadRequest)
+	}
+	c := Coord{
+		X: x,
+		Y: y,
+	}
+
+	m.db.Update(func(tx *bbolt.Tx) error {
+		grids := tx.Bucket([]byte("grids"))
+		if grids == nil {
+			return nil
+		}
+		id := []byte{}
+		err := grids.ForEach(func(k, v []byte) error {
+			g := GridData{}
+			err := json.Unmarshal(v, &g)
+			if err != nil {
+				return err
+			}
+			if g.Coord == c {
+				id = k
+				return errFound
+			}
+			return nil
+		})
+		if err != errFound {
+			return err
+		}
+		grids.Delete(id)
+
+		return nil
+	})
+
+	m.SaveTile(c, 0, "", -1)
+	for z := 1; z <= 5; z++ {
+		c = c.Parent()
+		m.updateZoomLevel(c, z)
 	}
 	http.Redirect(rw, req, "/admin/", 302)
 }

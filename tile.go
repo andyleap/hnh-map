@@ -39,7 +39,7 @@ func (m *Map) GetTile(c Coord, z int) (td *TileData) {
 	return
 }
 
-func (m *Map) SaveTile(c Coord, z int, f string) {
+func (m *Map) SaveTile(c Coord, z int, f string, t int64) {
 	m.db.Update(func(tx *bbolt.Tx) error {
 		tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
 		if err != nil {
@@ -53,7 +53,7 @@ func (m *Map) SaveTile(c Coord, z int, f string) {
 			Coord: c,
 			Zoom:  z,
 			File:  f,
-			Cache: time.Now().UnixNano(),
+			Cache: t,
 		}
 		raw, err := json.Marshal(td)
 		if err != nil {

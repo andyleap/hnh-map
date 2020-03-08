@@ -24,23 +24,34 @@
                 </div>
             </div>
         </div>
+        <vue-context ref="menu">
+            <template slot-scope="tile" v-if="tile.data">
+                <li>
+                    <a @click.prevent="wipeTile(tile.data)">Wipe tile {{ tile.data.coords.x }}, {{ tile.data.coords.y }}</a>
+                </li>
+            </template>
+            
+        </vue-context>
     </div>
 </template>
 
 <script>
     import {ModelSelect} from 'vue-search-select'
-    import {GridCoordLayer, HnHCRS, HnHMaxZoom, HnHMinZoom, TileSize} from "../utils/LeafletCustomTypes";
+    import {GridCoordLayer, MouseoverLayer, HnHCRS, HnHMaxZoom, HnHMinZoom, TileSize} from "../utils/LeafletCustomTypes";
     import {SmartTileLayer} from "../utils/SmartTileLayer";
     import * as L from "leaflet";
     import {API_ENDPOINT} from "../main";
     import {Marker} from "../data/Marker";
     import {UniqueList} from "../data/UniqueList";
     import {Character} from "../data/Character";
+    import { VueContext } from 'vue-context';
+    
 
     export default {
         name: "MapView",
         components: {
-            ModelSelect
+            ModelSelect,
+            VueContext
         },
         data: function () {
             return {
@@ -130,7 +141,7 @@
                         this.autoMode = false;
                     } else {
                         let point = this.map.project(this.map.getCenter(), 6);
-                        let coordinate = {x: ~~(point.x / TileSize), y: ~~(point.y / TileSize), z: this.map.getZoom()};
+                        let coordinate = {x: Math.floor(point.x / TileSize), y: Math.floor(point.y / TileSize), z: this.map.getZoom()};
                         this.$router.replace({path: `/grid/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
                         this.trackingCharacterId = -1;
                     }
@@ -139,9 +150,19 @@
                 this.layer = new SmartTileLayer('grids/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: TileSize});
                 this.layer.invalidTile = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
                 this.layer.addTo(this.map);
-                
+
                 this.coordLayer = new GridCoordLayer({tileSize: TileSize, opacity: 0});
                 this.coordLayer.addTo(this.map);
+
+                /*this.map.on('mousemove', (mev) => {
+                    coords = this.map.project(mev.latlng, 6);
+                })*/
+
+                this.map.on('contextmenu', ((mev) => {
+                    let point = this.map.project(mev.latlng, 6);
+                    let coords = {x: Math.floor(point.x / TileSize), y: Math.floor(point.y / TileSize)};
+                    this.$refs.menu.open(mev.originalEvent, { coords: coords });
+                }).bind(this));
 
                 var source = new EventSource("updates");
                 source.onmessage = (function(event) {
@@ -231,6 +252,9 @@
             zoomOut() {
                 this.trackingCharacterId = -1;
                 this.map.setView([0, 0], HnHMinZoom);
+            },
+            wipeTile(data) {
+                this.$http.get(`${API_ENDPOINT}/admin/wipeTile`, {params: data.coords});
             }
         }
     }
@@ -264,4 +288,6 @@
         left: 10px;
         z-index: 502;
     }
+    
+    @import  '~vue-context/dist/css/vue-context.css';
 </style>
