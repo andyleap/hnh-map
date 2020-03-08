@@ -94,6 +94,7 @@ func (m *Map) updateChar(rw http.ResponseWriter, req *http.Request) {
 	}{}
 	err := json.NewDecoder(req.Body).Decode(&craw)
 	if err != nil {
+		log.Println("Error decoding char update json: ", err)
 		return
 	}
 	c := Character{
@@ -122,6 +123,7 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 	err := json.NewDecoder(req.Body).Decode(&markers)
 	log.Println(markers)
 	if err != nil {
+		log.Println("Error decoding marker json: ", err)
 		return
 	}
 	user, ok := req.Context().Value(UserInfo).(string)
