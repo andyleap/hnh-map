@@ -65,7 +65,8 @@
                 questGivers: [],
                 players: [],
                 selectedMarker: {value: false},
-                selectedPlayer: {value: false}
+                selectedPlayer: {value: false},
+                auths: []
             }
         },
         watch: {
@@ -159,9 +160,11 @@
                 })*/
 
                 this.map.on('contextmenu', ((mev) => {
-                    let point = this.map.project(mev.latlng, 6);
-                    let coords = {x: Math.floor(point.x / TileSize), y: Math.floor(point.y / TileSize)};
-                    this.$refs.menu.open(mev.originalEvent, { coords: coords });
+                    if(this.auths.includes('admin')){
+                        let point = this.map.project(mev.latlng, 6);
+                        let coords = {x: Math.floor(point.x / TileSize), y: Math.floor(point.y / TileSize)};
+                        this.$refs.menu.open(mev.originalEvent, { coords: coords });
+                    }
                 }).bind(this));
 
                 var source = new EventSource("updates");
@@ -245,6 +248,7 @@
             },
             processConfig(config) {
                 document.title = config.title;
+                this.auths = config.auths;
             },
             toLatLng(x, y) {
                 return this.map.unproject([x, y], HnHMaxZoom);
