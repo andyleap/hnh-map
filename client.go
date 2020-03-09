@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/png"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -92,9 +93,15 @@ func (m *Map) updateChar(rw http.ResponseWriter, req *http.Request) {
 		X, Y int
 		Type string
 	}{}
-	err := json.NewDecoder(req.Body).Decode(&craw)
+	buf, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Println("Error reading char update json: ", err)
+		return
+	}
+	err = json.Unmarshal(buf, &craw)
 	if err != nil {
 		log.Println("Error decoding char update json: ", err)
+		log.Println("Original json: ", string(buf))
 		return
 	}
 	c := Character{
@@ -120,10 +127,15 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 		X, Y   int
 		Image  string
 	}{}
-	err := json.NewDecoder(req.Body).Decode(&markers)
-	log.Println(markers)
+	buf, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Println("Error reading marker json: ", err)
+		return
+	}
+	err = json.Unmarshal(buf, &markers)
 	if err != nil {
 		log.Println("Error decoding marker json: ", err)
+		log.Println("Original json: ", string(buf))
 		return
 	}
 	user, ok := req.Context().Value(UserInfo).(string)
