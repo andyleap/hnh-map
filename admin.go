@@ -257,7 +257,6 @@ func (m *Map) deleteUser(rw http.ResponseWriter, req *http.Request) {
 	}
 	http.Redirect(rw, req, "/admin", 302)
 	return
-
 }
 
 var errFound = errors.New("found tile")

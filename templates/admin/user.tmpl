@@ -48,6 +48,7 @@
                     </ul>
                 </div>
                 <button class="btn waves-effect waves-light" type="submit" name="action">Save</button>
+                {{if ne .Username ""}}<a class="waves-effect waves-light red btn" href="/admin/deleteUser?user={{.Username}}">Delete</a>{{end}}
             </form>
 		</div>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>

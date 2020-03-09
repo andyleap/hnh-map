@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -38,6 +39,16 @@ type Session struct {
 
 var (
 	gridStorage = flag.String("grids", "grids", "directory to store grids in")
+	port        = flag.Int("port", func() int {
+		if port, ok := os.LookupEnv("HNHMAP_PORT"); ok {
+			p, err := strconv.Atoi(port)
+			if err != nil {
+				log.Fatal(err)
+			}
+			return p
+		}
+		return 8080
+	}(), "Port to listen on")
 )
 
 func main() {
@@ -90,6 +101,7 @@ func main() {
 	// Admin endpoints
 	http.HandleFunc("/admin/", m.admin)
 	http.HandleFunc("/admin/user", m.adminUser)
+	http.HandleFunc("/admin/deleteUser", m.deleteUser)
 	http.HandleFunc("/admin/wipe", m.wipe)
 	http.HandleFunc("/admin/setPrefix", m.setPrefix)
 	http.HandleFunc("/admin/setTitle", m.setTitle)
@@ -106,7 +118,8 @@ func main() {
 
 	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Printf("Listening on port %d", *port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
 }
 
 type Character struct {
