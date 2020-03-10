@@ -1,9 +1,12 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -314,4 +317,100 @@ func (m *Map) wipeTile(rw http.ResponseWriter, req *http.Request) {
 		m.updateZoomLevel(c, z)
 	}
 	http.Redirect(rw, req, "/admin/", 302)
+}
+
+func (m *Map) backup(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	rw.Header().Set("Content-Type", "application/zip")
+	rw.Header().Set("Content-Disposition", "attachment; filename=\"backup.zip\"")
+
+	zw := zip.NewWriter(rw)
+	defer zw.Close()
+
+	err := m.db.Update(func(tx *bbolt.Tx) error {
+		w, err := zw.Create("grids.db")
+		if err != nil {
+			return err
+		}
+		err = tx.Copy(w)
+		if err != nil {
+			return err
+		}
+
+		tiles := tx.Bucket([]byte("tiles"))
+		if tiles == nil {
+			return nil
+		}
+		zoom := tiles.Bucket([]byte("0"))
+		if zoom == nil {
+			return nil
+		}
+		return zoom.ForEach(func(k, v []byte) error {
+			td := TileData{}
+			json.Unmarshal(v, &td)
+			if td.File == "" {
+				return nil
+			}
+			f, err := os.Open(m.gridStorage + "/" + td.File)
+			if err != nil {
+				return nil
+			}
+			defer f.Close()
+			w, err := zw.Create(td.File)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(w, f)
+			return err
+		})
+	})
+	if err != nil {
+		log.Println(err)
+	}
+
+}
+
+func (m *Map) hideMarker(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+
+	err := m.db.Update(func(tx *bbolt.Tx) error {
+		mb, err := tx.CreateBucketIfNotExists([]byte("markers"))
+		if err != nil {
+			return err
+		}
+		grid, err := mb.CreateBucketIfNotExists([]byte("grid"))
+		if err != nil {
+			return err
+		}
+		idB, err := mb.CreateBucketIfNotExists([]byte("id"))
+		if err != nil {
+			return err
+		}
+		key := idB.Get([]byte(req.FormValue("id")))
+		if key == nil {
+			return fmt.Errorf("Could not find key %s", req.FormValue("id"))
+		}
+		raw := grid.Get(key)
+		if raw == nil {
+			return fmt.Errorf("Could not find key %s", string(key))
+		}
+		m := Marker{}
+		json.Unmarshal(raw, &m)
+		m.Hidden = true
+		raw, _ = json.Marshal(m)
+		grid.Put(key, raw)
+		return nil
+	})
+	if err != nil {
+		log.Println(err)
+	}
+	return
 }

@@ -17,6 +17,7 @@ export class Marker {
         this.marker = false;
         this.text = this.name;
         this.value = this.id;
+        this.hidden = markerData.hidden;
     }
 
     remove(map) {
@@ -26,10 +27,12 @@ export class Marker {
     }
 
     add(map) {
-        let icon = new ImageIcon({iconUrl: `${this.image}.png`});
-        let position = map.unproject([this.position.x, this.position.y], HnHMaxZoom);
-        this.marker = L.marker(position, {icon: icon, title: this.name});
-        this.marker.addTo(map)
+        if(!this.hidden) {
+            let icon = new ImageIcon({iconUrl: `${this.image}.png`});
+            let position = map.unproject([this.position.x, this.position.y], HnHMaxZoom);
+            this.marker = L.marker(position, {icon: icon, title: this.name});
+            this.marker.addTo(map)
+        }
     }
 
     jumpTo(map) {
@@ -42,6 +45,12 @@ export class Marker {
     setClickCallback(callback) {
         if (this.marker) {
             this.marker.on("click", callback);
+        }
+    }
+
+    setContextMenu(callback) {
+        if(this.marker) {
+            this.marker.on("contextmenu", callback);
         }
     }
 }

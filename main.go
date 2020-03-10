@@ -76,10 +76,12 @@ func main() {
 		}
 		vraw := b.Get([]byte("version"))
 		v, _ := strconv.Atoi(string(vraw))
-		for _, f := range migrations[v:] {
-			err = f(tx)
-			if err != nil {
-				return err
+		if v < len(migrations) {
+			for _, f := range migrations[v:] {
+				err = f(tx)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		return b.Put([]byte("version"), []byte(strconv.Itoa(len(migrations))))
@@ -106,12 +108,14 @@ func main() {
 	http.HandleFunc("/admin/setPrefix", m.setPrefix)
 	http.HandleFunc("/admin/setTitle", m.setTitle)
 	http.HandleFunc("/admin/rebuildZooms", m.rebuildZooms)
+	http.HandleFunc("/admin/backup", m.backup)
 
 	// Map frontend endpoints
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
 	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
 	http.HandleFunc("/map/api/config", m.config)
 	http.HandleFunc("/map/api/admin/wipeTile", m.wipeTile)
+	http.HandleFunc("/map/api/admin/hideMarker", m.hideMarker)
 	http.HandleFunc("/map/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
@@ -133,8 +137,18 @@ type Character struct {
 type Marker struct {
 	Name     string   `json:"name"`
 	ID       int      `json:"id"`
+	GridID   int      `json:"string"`
 	Position Position `json:"position"`
 	Image    string   `json:"image"`
+	Hidden   bool     `json:"hidden"`
+}
+
+type FrontendMarker struct {
+	Name     string   `json:"name"`
+	ID       int      `json:"id"`
+	Position Position `json:"position"`
+	Image    string   `json:"image"`
+	Hidden   bool     `json:"hidden"`
 }
 
 type GridData struct {

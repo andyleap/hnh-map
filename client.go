@@ -138,46 +138,47 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 		log.Println("Original json: ", string(buf))
 		return
 	}
-	user, ok := req.Context().Value(UserInfo).(string)
-	if !ok {
-		return
-	}
 	m.db.Update(func(tx *bbolt.Tx) error {
-		markersB, err := tx.CreateBucketIfNotExists([]byte("markers"))
+		mb, err := tx.CreateBucketIfNotExists([]byte("markers"))
 		if err != nil {
 			return err
 		}
-		grids, err := tx.CreateBucketIfNotExists([]byte("grids"))
+		grid, err := mb.CreateBucketIfNotExists([]byte("grid"))
 		if err != nil {
 			return err
 		}
-		ms := []Marker{}
+		idB, err := mb.CreateBucketIfNotExists([]byte("id"))
+		if err != nil {
+			return err
+		}
+
 		for _, mraw := range markers {
-			gridRaw := grids.Get([]byte(strconv.Itoa(mraw.GridID)))
-			grid := GridData{}
-			if gridRaw == nil {
+			key := []byte(fmt.Sprintf("%d_%d_%d", mraw.GridID, mraw.X, mraw.Y))
+			if grid.Get(key) != nil {
 				continue
-			}
-			err := json.Unmarshal(gridRaw, &grid)
-			if err != nil {
-				return err
 			}
 			if mraw.Image == "" {
 				mraw.Image = "gfx/terobjs/mm/custom"
 			}
+			id, err := idB.NextSequence()
+			if err != nil {
+				return err
+			}
+			idKey := []byte(strconv.Itoa(int(id)))
 			m := Marker{
-				Name: mraw.Name,
-				ID:   1,
+				Name:   mraw.Name,
+				ID:     int(id),
+				GridID: mraw.GridID,
 				Position: Position{
-					X: mraw.X + grid.Coord.X*100,
-					Y: mraw.Y + grid.Coord.Y*100,
+					X: mraw.X,
+					Y: mraw.Y,
 				},
 				Image: mraw.Image,
 			}
-			ms = append(ms, m)
+			raw, _ := json.Marshal(m)
+			grid.Put(key, raw)
+			idB.Put(idKey, key)
 		}
-		raw, _ := json.Marshal(ms)
-		markersB.Put([]byte(user), raw)
 		return nil
 	})
 }

@@ -30,7 +30,14 @@
                     <a @click.prevent="wipeTile(tile.data)">Wipe tile {{ tile.data.coords.x }}, {{ tile.data.coords.y }}</a>
                 </li>
             </template>
-            
+        </vue-context>
+
+        <vue-context ref="markermenu">
+            <template slot-scope="data" v-if="data.data">
+                <li>
+                    <a @click.prevent="hideMarker(data.data)">Hide marker {{ data.data.name }}</a>
+                </li>
+            </template>
         </vue-context>
     </div>
 </template>
@@ -215,6 +222,11 @@
                         marker.setClickCallback(() => {
                             this.map.setView(marker.marker.getLatLng(), HnHMaxZoom);
                         });
+                        marker.setContextMenu((mev) => {
+                            if(this.auths.includes('admin')){
+                                this.$refs.markermenu.open(mev.originalEvent, { name: marker.name, id: marker.id });
+                            }
+                        });
                     },
                     (marker) => { // Remove
                         marker.remove(this.map);
@@ -259,6 +271,10 @@
             },
             wipeTile(data) {
                 this.$http.get(`${API_ENDPOINT}/admin/wipeTile`, {params: data.coords});
+            },
+            hideMarker(data) {
+                this.$http.get(`${API_ENDPOINT}/admin/hideMarker`, {params: {id: data.id}});
+                this.markers.byId(data.id).remove(this.map);
             }
         }
     }

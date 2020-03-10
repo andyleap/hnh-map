@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"strconv"
 
 	"go.etcd.io/bbolt"
 )
@@ -34,26 +34,41 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	markers := []Marker{}
+	markers := []FrontendMarker{}
 	m.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("markers"))
 		if b == nil {
 			return nil
 		}
-		added := map[string]struct{}{}
-		b.ForEach(func(k, v []byte) error {
-			ms := []Marker{}
-			json.Unmarshal(v, &ms)
-			for _, m := range ms {
-				pos := fmt.Sprintf("%d_%d", m.Position.X, m.Position.Y)
-				if _, ok := added[pos]; !ok {
-					markers = append(markers, m)
-					added[pos] = struct{}{}
-				}
+		grid := b.Bucket([]byte("grid"))
+		if grid == nil {
+			return nil
+		}
+		grids := tx.Bucket([]byte("grids"))
+		if grids == nil {
+			return nil
+		}
+		return grid.ForEach(func(k, v []byte) error {
+			m := Marker{}
+			json.Unmarshal(v, &m)
+			graw := grids.Get([]byte(strconv.Itoa(m.GridID)))
+			if graw == nil {
+				return nil
 			}
+			g := GridData{}
+			json.Unmarshal(graw, &g)
+			markers = append(markers, FrontendMarker{
+				Image:  m.Image,
+				Hidden: m.Hidden,
+				ID:     m.ID,
+				Name:   m.Name,
+				Position: Position{
+					X: m.Position.X + g.Coord.X*100,
+					Y: m.Position.Y + g.Coord.Y*100,
+				},
+			})
 			return nil
 		})
-		return nil
 	})
 	json.NewEncoder(rw).Encode(markers)
 }
