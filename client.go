@@ -251,8 +251,10 @@ func (m *Map) mapdataIndex(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
-	parts := strings.SplitN(req.Header.Get("Content-Type"), "=", 2)
-	req.Header.Set("Content-Type", parts[0]+"=\""+parts[1]+"\"")
+	if strings.Count(req.Header.Get("Content-Type"), "=") >= 2 && strings.Count(req.Header.Get("Content-Type"), "\"") == 0 {
+		parts := strings.SplitN(req.Header.Get("Content-Type"), "=", 2)
+		req.Header.Set("Content-Type", parts[0]+"=\""+parts[1]+"\"")
+	}
 
 	err := req.ParseMultipartForm(100000000)
 	if err != nil {
