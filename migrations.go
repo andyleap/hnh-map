@@ -57,6 +57,9 @@ var migrations = []func(tx *bbolt.Tx) error{
 		return b.Put([]byte("title"), []byte("HnH Automapper Server"))
 	},
 	func(tx *bbolt.Tx) error {
-		return tx.DeleteBucket([]byte("markers"))
+		if tx.Bucket([]byte("markers")) != nil {
+			return tx.DeleteBucket([]byte("markers"))
+		}
+		return nil
 	},
 }
