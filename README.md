@@ -8,7 +8,7 @@ Docker image can be built from sources, or is available at https://hub.docker.co
 Run it via whatever you feel like, it's listening internally on port 8080 and expects `/map` to be mounted as a volume 
 (database and images are stored here), so something like the below will suffice.
 
-    docker run -v /srv/hnh-map:/map -p 80:8080 andyleap/hnh-auto-mapper
+    docker run -v /srv/hnh-map:/map -p 80:8080 andyleap/hnh-auto-mapper:v3
   
 Set it up under a domain name however you prefer (nginx reverse proxy, traefik, caddy, apache, whatever) and 
 point your auto-mapping supported client at it (like Purus pasta)
