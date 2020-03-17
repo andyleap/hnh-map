@@ -62,6 +62,7 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 				Hidden: m.Hidden,
 				ID:     m.ID,
 				Name:   m.Name,
+				Map:    g.Map,
 				Position: Position{
 					X: m.Position.X + g.Coord.X*100,
 					Y: m.Position.Y + g.Coord.Y*100,
@@ -71,6 +72,40 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 		})
 	})
 	json.NewEncoder(rw).Encode(markers)
+}
+
+type MapInfo struct {
+	ID   int `json:"id"`
+	Size int `json:"size"`
+}
+
+func (m *Map) getMaps(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_MAP) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	maps := map[int]*MapInfo{}
+	m.db.View(func(tx *bbolt.Tx) error {
+		grids := tx.Bucket([]byte("grids"))
+		if grids == nil {
+			return nil
+		}
+		return grids.ForEach(func(k, v []byte) error {
+			gd := GridData{}
+			json.Unmarshal(v, &gd)
+			mapInfo := maps[gd.Map]
+			if mapInfo == nil {
+				mapInfo = &MapInfo{
+					ID: gd.Map,
+				}
+				maps[gd.Map] = mapInfo
+			}
+			mapInfo.Size++
+			return nil
+		})
+	})
+	json.NewEncoder(rw).Encode(maps)
 }
 
 func (m *Map) config(rw http.ResponseWriter, req *http.Request) {

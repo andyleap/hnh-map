@@ -2,7 +2,8 @@
     <div>
         <div ref="map" class="map"></div>
         <div class="control-panel card">
-            <div class="card-body">
+            <div style="position: absolute;"><button class="btn btn-primary btn-sm" v-on:click="expandControlPanel = !expandControlPanel">-</button></div>
+            <div class="card-body" v-bind:class="{ hidden: !expandControlPanel }">
                 <div class="form-group">
                     <div class="form-check">
                         <input type="checkbox" class="form-check-input" id="check-grid-coords"
@@ -12,6 +13,10 @@
                     <button type="button" class="btn btn-secondary" style="margin-top: 10px;" v-on:click="zoomOut">Zoom
                         out
                     </button>
+                </div>
+                <div class="form-group">
+                    <label>Jump to Map</label>
+                    <model-select :options="maps" v-model="selectedMap" placeholder="Select Map"></model-select>
                 </div>
                 <div class="form-group">
                     <label>Jump to Quest Giver</label>
@@ -63,6 +68,7 @@
         data: function () {
             return {
                 showGridCoordinates: false,
+                expandControlPanel: true,
 
                 trackingCharacterId: -1,
                 autoMode: false,
@@ -71,9 +77,12 @@
                 markersCache: [],
                 questGivers: [],
                 players: [],
+                maps: [],
+                selectedMap: {value: false},
                 selectedMarker: {value: false},
                 selectedPlayer: {value: false},
-                auths: []
+                auths: [],
+                mapid: 0,
             }
         },
         watch: {
@@ -88,14 +97,27 @@
                 if (value !== -1) {
                     let character = this.characters.byId(value);
                     if (character) {
-                        this.map.setView(character.marker.getLatLng(), HnHMaxZoom);
+                        this.changeMap(character.map);
+                        let latlng = this.map.unproject([character.position.x, character.position.y], HnHMaxZoom);
+                        this.map.setView(latlng, HnHMaxZoom);
+
                         this.$router.push({path: `/character/${value}`});
                         this.autoMode = true;
                     } else {
                         this.map.setView([0, 0], HnHMinZoom);
-                        this.$router.replace({path: `/grid/0/0/${HnHMinZoom}`});
+                        let mapid = this.maps[0].id;
+                        this.$router.replace({path: `/grid/${mapid}/0/0/${HnHMinZoom}`});
                         this.trackingCharacterId = -1;
                     }
+                }
+            },
+            selectedMap(value) {
+                if (value) {
+                    this.changeMap(value.id);
+                    let zoom = this.map.getZoom();
+                    this.map.setView([0, 0], zoom);
+                    
+                    this.$router.replace({path: `/grid/${this.mapid}/0/0/${zoom}`});
                 }
             },
             selectedMarker(value) {
@@ -110,15 +132,18 @@
             }
         },
         mounted() {
-            this.$http.get(`${API_ENDPOINT}/v1/characters`).then(response => {
-                this.setupMap(response.body);
+            let chars = this.$http.get(`${API_ENDPOINT}/v1/characters`)
+            let maps = this.$http.get(`${API_ENDPOINT}/maps`)
+
+            Promise.all([chars, maps]).then(values => {
+                this.setupMap(values[0].body, values[1].body);
             }, () => this.$emit("error"));
         },
         beforeDestroy: function () {
             clearInterval(this.intervalId)
         },
         methods: {
-            setupMap(characters) {
+            setupMap(characters, maps) {
                 this.$http.get(`${API_ENDPOINT}/config`).then(response => {
                     this.processConfig(response.body);
                 }, () => this.$emit("error"));
@@ -137,11 +162,21 @@
                     markerZoomAnimation: true
                 });
 
+                for (let id in maps) {
+                    let map = maps[id];
+                    map.text = map.id;
+                    map.value = map.id;
+                    this.maps.push(map);
+                }
+                this.maps.sort((a, b) => {
+                    return a.size < b.size;
+                });
+
                 // Update url on manual drag, zoom
                 this.map.on("drag", () => {
                     let point = this.map.project(this.map.getCenter(), 6);
                     let coordinate = {x: ~~(point.x / TileSize), y: ~~(point.y / TileSize), z: this.map.getZoom()};
-                    this.$router.replace({path: `/grid/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
+                    this.$router.replace({path: `/grid/${this.mapid}/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
                     this.trackingCharacterId = -1;
                 });
                 this.map.on("zoom", () => {
@@ -150,12 +185,12 @@
                     } else {
                         let point = this.map.project(this.map.getCenter(), 6);
                         let coordinate = {x: Math.floor(point.x / TileSize), y: Math.floor(point.y / TileSize), z: this.map.getZoom()};
-                        this.$router.replace({path: `/grid/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
+                        this.$router.replace({path: `/grid/${this.mapid}/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
                         this.trackingCharacterId = -1;
                     }
                 });
          
-                this.layer = new SmartTileLayer('grids/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: TileSize});
+                this.layer = new SmartTileLayer('grids/{map}/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: TileSize});
                 this.layer.invalidTile = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
                 this.layer.addTo(this.map);
 
@@ -174,15 +209,39 @@
                     }
                 }).bind(this));
 
-                var source = new EventSource("updates");
-                source.onmessage = (function(event) {
+                this.source = new EventSource("updates");
+                this.source.onmessage = (function(event) {
                     var updates = JSON.parse(event.data);
                     for(var update of updates) {
-                        var key = update['X'] + ':' + update['Y'] + ':' + update['Z'];
+                        var key = update['M'] + ':' + update['X'] + ':' + update['Y'] + ':' + update['Z'];
                         this.layer.cache[key] = update['T'];
-                        this.layer.refresh(update['X'], update['Y'], update['Z']);
+                        if(this.layer.map == update['M']) {
+                            this.layer.refresh(update['X'], update['Y'], update['Z']);
+                        }
                     }
                 }).bind(this);
+
+                this.source.addEventListener('merge', ((e)=> {
+                    var merge = JSON.parse(e.data);
+                    if(this.mapid == merge['From']) {
+                        let mapTo = merge['To'];
+                        let point = this.map.project(this.map.getCenter(), 6);
+                        let coordinate = {x: Math.floor(point.x / TileSize), y: Math.floor(point.y / TileSize), z: this.map.getZoom()};
+                        coordinate.x += merge['Shift'].x;
+                        coordinate.y += merge['Shift'].y;
+                        this.$router.replace({path: `/grid/${mapTo}/${coordinate.x}/${coordinate.y}/${coordinate.z}`});
+
+                        let latLng = this.toLatLng(coordinate.x * 100, coordinate.y * 100);
+
+                        this.changeMap(mapTo);
+                        this.$http.get(`${API_ENDPOINT}/v1/markers`).then(response => {
+                            this.updateMarkers(response.body);
+                        }, () => {
+                            this.$emit("error")
+                        });
+                        this.map.setView(latLng, this.map.getZoom());
+                    }
+                }).bind(this));
 
                 this.markers = new UniqueList();
                 this.characters = new UniqueList();
@@ -195,8 +254,16 @@
                     this.trackingCharacterId = +this.$route.params.characterId;
                 } else if (this.$route.params.gridX && this.$route.params.gridY && this.$route.params.zoom) { // Navigate to specific grid
                     let latLng = this.toLatLng(this.$route.params.gridX * 100, this.$route.params.gridY * 100);
+
+                    if(this.mapid != this.$route.params.map) {
+                        this.changeMap(this.$route.params.map);
+                    }
+
                     this.map.setView(latLng, this.$route.params.zoom);
                 } else { // Just show a map
+                    if(this.maps.length > 0) {
+                        this.changeMap(this.maps[0].id);
+                    }
                     this.map.setView([0, 0], HnHMinZoom);
                 }
 
@@ -218,7 +285,7 @@
             updateMarkers(markersData) {
                 this.markers.update(markersData.map(it => new Marker(it)),
                     (marker) => { // Add
-                        marker.add(this.map);
+                        marker.add(this);
                         marker.setClickCallback(() => {
                             this.map.setView(marker.marker.getLatLng(), HnHMaxZoom);
                         });
@@ -229,7 +296,10 @@
                         });
                     },
                     (marker) => { // Remove
-                        marker.remove(this.map);
+                        marker.remove(this);
+                    },
+                    (marker, updated) => { // Update
+                        marker.update(this, updated);
                     });
                 this.markersCache.length = 0;
                 this.markers.getElements().forEach(it => this.markersCache.push(it));
@@ -240,19 +310,23 @@
             updateCharacters(charactersData) {
                 this.characters.update(charactersData.map(it => new Character(it)),
                     (character) => { // Add
-                        character.add(this.map);
+                        character.add(this);
                         character.setClickCallback(() => { // Zoom to character on marker click
                             this.trackingCharacterId = character.id;
                         });
                     },
                     (character) => { // Remove
-                        character.remove(this.map);
+                        character.remove(this);
                     },
                     (character, updated) => { // Update
-                        character.update(this.map, updated);
                         if (this.trackingCharacterId == updated.id) {
-                            this.map.setView(character.marker.getLatLng(), HnHMaxZoom);
+                            if(this.mapid != updated.map) {
+                                this.changeMap(updated.map);
+                            }
+                            let latlng = this.map.unproject([updated.position.x, updated.position.y], HnHMaxZoom);
+                            this.map.setView(latlng, HnHMaxZoom);
                         }
+                        character.update(this, updated);
                     }
                 );
                 this.players.length = 0;
@@ -275,6 +349,21 @@
             hideMarker(data) {
                 this.$http.get(`${API_ENDPOINT}/admin/hideMarker`, {params: {id: data.id}});
                 this.markers.byId(data.id).remove(this.map);
+            },
+            changeMap(mapid) {
+                if(mapid != this.mapid) {
+                    this.mapid = mapid;
+                    this.layer.map = this.mapid;
+                    this.layer.redraw();
+                    this.markers.getElements().forEach(it => {
+                        it.remove(this);
+                        it.add(this);
+                    });
+                    this.characters.getElements().forEach(it => {
+                        it.remove(this);
+                        it.add(this);
+                    });
+                }
             }
         }
     }
@@ -307,6 +396,10 @@
         top: 10%;
         left: 10px;
         z-index: 502;
+    }
+
+    .hidden {
+        display: none;
     }
     
     @import  '~vue-context/dist/css/vue-context.css';

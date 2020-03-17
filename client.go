@@ -68,16 +68,18 @@ func (m *Map) client(rw http.ResponseWriter, req *http.Request) {
 	req = req.WithContext(ctx)
 
 	switch matches[2] {
-	case "api/v1/locate":
+	case "locate":
 		m.locate(rw, req)
-	case "api/v2/updateGrid":
-		m.uploadMinimap(rw, req)
-	case "api/v2/updateCharacter":
-		m.updateChar(rw, req)
-	case "api/v1/uploadMarkers":
+	case "gridUpdate":
+		m.gridUpdate(rw, req)
+	case "gridUpload":
+		m.gridUpload(rw, req)
+	case "positionUpdate":
+		m.updatePositions(rw, req)
+	case "markerUpdate":
 		m.uploadMarkers(rw, req)
-	case "grids/mapdata_index":
-		m.mapdataIndex(rw, req)
+	/*case "mapData":
+	m.mapdataIndex(rw, req)*/
 	case "":
 		http.Redirect(rw, req, "/map/", 302)
 	default:
@@ -85,38 +87,58 @@ func (m *Map) client(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func (m *Map) updateChar(rw http.ResponseWriter, req *http.Request) {
+func (m *Map) updatePositions(rw http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
-	craw := struct {
-		Name string
-		ID   int
-		X, Y int
+	craws := map[string]struct {
+		Name   string
+		GridID string
+		Coords struct {
+			X, Y int
+		}
 		Type string
 	}{}
 	buf, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Println("Error reading char update json: ", err)
+		log.Println("Error reading position update json: ", err)
 		return
 	}
-	err = json.Unmarshal(buf, &craw)
+	err = json.Unmarshal(buf, &craws)
 	if err != nil {
-		log.Println("Error decoding char update json: ", err)
+		log.Println("Error decoding position update json: ", err)
 		log.Println("Original json: ", string(buf))
 		return
 	}
-	c := Character{
-		Name: craw.Name,
-		ID:   craw.ID,
-		Position: Position{
-			X: craw.X,
-			Y: craw.Y,
-		},
-		Type:    craw.Type,
-		updated: time.Now(),
-	}
-	m.chmu.Lock()
-	defer m.chmu.Unlock()
-	m.characters[c.Name] = c
+	m.db.View(func(tx *bbolt.Tx) error {
+		grids := tx.Bucket([]byte("grids"))
+		if grids == nil {
+			return nil
+		}
+		m.chmu.Lock()
+		defer m.chmu.Unlock()
+		for id, craw := range craws {
+			grid := grids.Get([]byte(craw.GridID))
+			if grid == nil {
+				return nil
+			}
+			gd := GridData{}
+			json.Unmarshal(grid, &gd)
+			idnum, _ := strconv.Atoi(id)
+			c := Character{
+				Name: craw.Name,
+				ID:   idnum,
+				Map:  gd.Map,
+				Position: Position{
+					X: craw.Coords.X + (gd.Coord.X * 100),
+					Y: craw.Coords.Y + (gd.Coord.Y * 100),
+				},
+				Type:    craw.Type,
+				updated: time.Now(),
+			}
+			m.characters[id] = c
+		}
+		return nil
+	})
+
 }
 
 func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
@@ -126,6 +148,8 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 		GridID int
 		X, Y   int
 		Image  string
+		Type   string
+		Color  string
 	}{}
 	buf, err := ioutil.ReadAll(req.Body)
 	if err != nil {
@@ -184,12 +208,10 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (m *Map) locate(rw http.ResponseWriter, req *http.Request) {
-	grid := req.FormValue("gridId")
-	setZero := false
+	grid := req.FormValue("gridID")
 	err := m.db.View(func(tx *bbolt.Tx) error {
 		grids := tx.Bucket([]byte("grids"))
 		if grids == nil {
-			setZero = true
 			return nil
 		}
 		curRaw := grids.Get([]byte(grid))
@@ -201,34 +223,207 @@ func (m *Map) locate(rw http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(rw, "%d;%d", cur.Coord.X, cur.Coord.Y)
+		fmt.Fprintf(rw, "%d;%d;%d", cur.Map, cur.Coord.X, cur.Coord.Y)
 		return nil
 	})
-	if setZero {
-		err = m.db.Update(func(tx *bbolt.Tx) error {
-			b, err := tx.CreateBucketIfNotExists([]byte("grids"))
-			if err != nil {
-				return err
-			}
-			cur := GridData{}
-			cur.ID = grid
-			cur.Coord.X = 0
-			cur.Coord.Y = 0
-
-			raw, err := json.Marshal(cur)
-			if err != nil {
-				return err
-			}
-			b.Put([]byte(grid), raw)
-			fmt.Fprintf(rw, "%d;%d", cur.Coord.X, cur.Coord.Y)
-			return nil
-		})
-	}
 	if err != nil {
 		rw.WriteHeader(404)
 	}
 }
 
+type GridUpdate struct {
+	Grids [][]string `json:"grids"`
+}
+
+type GridRequest struct {
+	GridRequests []string `json:"gridRequests"`
+	Map          int      `json:"map"`
+	Coords       Coord    `json:"coords"`
+}
+
+func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
+	defer req.Body.Close()
+	dec := json.NewDecoder(req.Body)
+	grup := GridUpdate{}
+	err := dec.Decode(&grup)
+	if err != nil {
+		log.Println("Error decoding grid request json: ", err)
+		http.Error(rw, "Error decoding request", http.StatusBadRequest)
+		return
+	}
+	log.Println(grup)
+
+	ops := []struct {
+		mapid int
+		x, y  int
+		f     string
+	}{}
+
+	greq := GridRequest{}
+
+	err = m.db.Update(func(tx *bbolt.Tx) error {
+		grids, err := tx.CreateBucketIfNotExists([]byte("grids"))
+		if err != nil {
+			return err
+		}
+		tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
+		if err != nil {
+			return err
+		}
+
+		maps := map[int]struct{ X, Y int }{}
+		for x, row := range grup.Grids {
+			for y, grid := range row {
+				gridRaw := grids.Get([]byte(grid))
+				if gridRaw != nil {
+					gd := GridData{}
+					json.Unmarshal(gridRaw, &gd)
+					maps[gd.Map] = struct{ X, Y int }{gd.Coord.X - x, gd.Coord.Y - y}
+				}
+			}
+		}
+		if len(maps) == 0 {
+			tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
+			if err != nil {
+				return err
+			}
+			seq, err := tiles.NextSequence()
+			if err != nil {
+				return err
+			}
+			log.Println("Client made mapid ", seq)
+			for x, row := range grup.Grids {
+				for y, grid := range row {
+
+					cur := GridData{}
+					cur.ID = grid
+					cur.Map = int(seq)
+					cur.Coord.X = x - 1
+					cur.Coord.Y = y - 1
+
+					raw, err := json.Marshal(cur)
+					if err != nil {
+						return err
+					}
+					grids.Put([]byte(grid), raw)
+					greq.GridRequests = append(greq.GridRequests, grid)
+				}
+			}
+			greq.Coords = Coord{0, 0}
+			return nil
+		}
+
+		mapid := 0
+		offset := struct{ X, Y int }{}
+		for mapid, offset = range maps {
+		}
+
+		log.Println("Client in mapid ", mapid)
+
+		for x, row := range grup.Grids {
+			for y, grid := range row {
+				cur := GridData{}
+				if curRaw := grids.Get([]byte(grid)); curRaw != nil {
+					json.Unmarshal(curRaw, &cur)
+					if time.Now().After(cur.NextUpdate) {
+						greq.GridRequests = append(greq.GridRequests, grid)
+					}
+					continue
+				}
+
+				cur.ID = grid
+				cur.Map = mapid
+				cur.Coord.X = x + offset.X
+				cur.Coord.Y = y + offset.Y
+				raw, err := json.Marshal(cur)
+				if err != nil {
+					return err
+				}
+				grids.Put([]byte(grid), raw)
+				greq.GridRequests = append(greq.GridRequests, grid)
+			}
+		}
+		if len(maps) > 1 {
+			grids.ForEach(func(k, v []byte) error {
+				gd := GridData{}
+				json.Unmarshal(v, &gd)
+				if gd.Map == mapid {
+					return nil
+				}
+				if merge, ok := maps[gd.Map]; ok {
+					var td *TileData
+					mapb, err := tiles.CreateBucketIfNotExists([]byte(strconv.Itoa(gd.Map)))
+					if err != nil {
+						return err
+					}
+					zoom, err := mapb.CreateBucketIfNotExists([]byte(strconv.Itoa(0)))
+					if err != nil {
+						return err
+					}
+					tileraw := zoom.Get([]byte(gd.Coord.Name()))
+					if tileraw != nil {
+						json.Unmarshal(tileraw, &td)
+					}
+
+					gd.Map = mapid
+					gd.Coord.X += offset.X - merge.X
+					gd.Coord.Y += offset.Y - merge.Y
+					raw, _ := json.Marshal(gd)
+					if td != nil {
+						ops = append(ops, struct {
+							mapid int
+							x     int
+							y     int
+							f     string
+						}{
+							mapid: mapid,
+							x:     gd.Coord.X,
+							y:     gd.Coord.Y,
+							f:     td.File,
+						})
+					}
+					grids.Put(k, raw)
+				}
+				return nil
+			})
+		}
+		for mergeid, merge := range maps {
+			if mapid == mergeid {
+				continue
+			}
+			log.Println("Reporting merge", mergeid, mapid)
+			m.reportMerge(mergeid, mapid, Coord{X: offset.X - merge.X, Y: offset.Y - merge.Y})
+		}
+		if curRaw := grids.Get([]byte(grup.Grids[1][1])); curRaw != nil {
+			cur := GridData{}
+			json.Unmarshal(curRaw, &cur)
+			greq.Map = cur.Map
+			greq.Coords = cur.Coord
+		}
+		return nil
+	})
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	needProcess := map[zoomproc]struct{}{}
+	for _, op := range ops {
+		m.SaveTile(op.mapid, Coord{X: op.x, Y: op.y}, 0, op.f, time.Now().UnixNano())
+		needProcess[zoomproc{c: Coord{X: op.x, Y: op.y}.Parent(), m: op.mapid}] = struct{}{}
+	}
+	for z := 1; z <= 5; z++ {
+		process := needProcess
+		needProcess = map[zoomproc]struct{}{}
+		for p := range process {
+			m.updateZoomLevel(p.m, p.c, z)
+			needProcess[zoomproc{p.c.Parent(), p.m}] = struct{}{}
+		}
+	}
+	log.Println(greq)
+	json.NewEncoder(rw).Encode(greq)
+}
+
+/*
 func (m *Map) mapdataIndex(rw http.ResponseWriter, req *http.Request) {
 	err := m.db.View(func(tx *bbolt.Tx) error {
 		grids := tx.Bucket([]byte("grids"))
@@ -241,7 +436,7 @@ func (m *Map) mapdataIndex(rw http.ResponseWriter, req *http.Request) {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(rw, "%s,%d,%d\n", cur.ID, cur.Coord.X, cur.Coord.Y)
+			fmt.Fprintf(rw, "%s,%d,%d,%d\n", cur.ID, cur.Map, cur.Coord.X, cur.Coord.Y)
 			return nil
 		})
 	})
@@ -249,8 +444,8 @@ func (m *Map) mapdataIndex(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(404)
 	}
 }
-
-func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
+*/
+func (m *Map) gridUpload(rw http.ResponseWriter, req *http.Request) {
 	if strings.Count(req.Header.Get("Content-Type"), "=") >= 2 && strings.Count(req.Header.Get("Content-Type"), "\"") == 0 {
 		parts := strings.SplitN(req.Header.Get("Content-Type"), "=", 2)
 		req.Header.Set("Content-Type", parts[0]+"=\""+parts[1]+"\"")
@@ -258,29 +453,22 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 
 	err := req.ParseMultipartForm(100000000)
 	if err != nil {
-		log.Panic(err)
+		log.Println(err)
+		return
 	}
 	file, _, err := req.FormFile("file")
 	if err != nil {
-		log.Panic(err)
+		log.Println(err)
+		return
 	}
 	id := req.FormValue("id")
-	xraw := req.FormValue("x")
-	yraw := req.FormValue("y")
 
-	x, err := strconv.Atoi(xraw)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	y, err := strconv.Atoi(yraw)
-	if err != nil {
-		log.Println(err)
-		return
-	}
+	log.Println("map tile for ", id)
 
 	updateTile := false
 	cur := GridData{}
+
+	mapid := 0
 
 	m.db.Update(func(tx *bbolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte("grids"))
@@ -288,21 +476,16 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 			return err
 		}
 		curRaw := b.Get([]byte(id))
-		if curRaw != nil {
-			err := json.Unmarshal(curRaw, &cur)
-			if err != nil {
-				return err
-			}
-			if cur.Coord.X != x || cur.Coord.Y != y {
-				return fmt.Errorf("invalid coords")
-			}
-		} else {
-			cur.ID = id
-			cur.Coord.X = x
-			cur.Coord.Y = y
+		if curRaw == nil {
+			return fmt.Errorf("Unknown grid id: %s", id)
+		}
+		err = json.Unmarshal(curRaw, &cur)
+		if err != nil {
+			return err
 		}
 
 		updateTile = time.Now().After(cur.NextUpdate)
+		mapid = cur.Map
 
 		if updateTile {
 			cur.NextUpdate = time.Now().Add(time.Minute * 30)
@@ -318,8 +501,8 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 	})
 
 	if updateTile {
-		os.MkdirAll(fmt.Sprintf("%s/0", m.gridStorage), 0600)
-		f, err := os.Create(fmt.Sprintf("%s/0/%s", m.gridStorage, cur.ID))
+		os.MkdirAll(fmt.Sprintf("%s/grids", m.gridStorage), 0600)
+		f, err := os.Create(fmt.Sprintf("%s/grids/%s.png", m.gridStorage, cur.ID))
 		if err != nil {
 			return
 		}
@@ -330,17 +513,17 @@ func (m *Map) uploadMinimap(rw http.ResponseWriter, req *http.Request) {
 		}
 		f.Close()
 
-		m.SaveTile(cur.Coord, 0, fmt.Sprintf("0/%s", cur.ID), time.Now().UnixNano())
+		m.SaveTile(mapid, cur.Coord, 0, fmt.Sprintf("grids/%s.png", cur.ID), time.Now().UnixNano())
 
 		c := cur.Coord
 		for z := 1; z <= 5; z++ {
 			c = c.Parent()
-			m.updateZoomLevel(c, z)
+			m.updateZoomLevel(mapid, c, z)
 		}
 	}
 }
 
-func (m *Map) updateZoomLevel(c Coord, z int) {
+func (m *Map) updateZoomLevel(mapid int, c Coord, z int) {
 	img := image.NewNRGBA(image.Rect(0, 0, 100, 100))
 	draw.Draw(img, img.Bounds(), image.Black, image.Point{}, draw.Src)
 	for x := 0; x <= 1; x++ {
@@ -350,7 +533,7 @@ func (m *Map) updateZoomLevel(c Coord, z int) {
 			subC.Y *= 2
 			subC.X += x
 			subC.Y += y
-			td := m.GetTile(subC, z-1)
+			td := m.GetTile(mapid, subC, z-1)
 			if td == nil || td.File == "" {
 				continue
 			}
@@ -366,9 +549,9 @@ func (m *Map) updateZoomLevel(c Coord, z int) {
 			draw.BiLinear.Scale(img, image.Rect(50*x, 50*y, 50*x+50, 50*y+50), subimg, subimg.Bounds(), draw.Over, nil)
 		}
 	}
-	os.MkdirAll(fmt.Sprintf("%s/%d", m.gridStorage, z), 0600)
-	f, err := os.Create(fmt.Sprintf("%s/%d/%s", m.gridStorage, z, c.Name()))
-	m.SaveTile(c, z, fmt.Sprintf("%d/%s", z, c.Name()), time.Now().UnixNano())
+	os.MkdirAll(fmt.Sprintf("%s/%d/%d", m.gridStorage, mapid, z), 0600)
+	f, err := os.Create(fmt.Sprintf("%s/%d/%d/%s.png", m.gridStorage, mapid, z, c.Name()))
+	m.SaveTile(mapid, c, z, fmt.Sprintf("%d/%d/%s.png", mapid, z, c.Name()), time.Now().UnixNano())
 	if err != nil {
 		return
 	}

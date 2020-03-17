@@ -62,4 +62,47 @@ var migrations = []func(tx *bbolt.Tx) error{
 		}
 		return nil
 	},
+	func(tx *bbolt.Tx) error {
+		if tx.Bucket([]byte("tiles")) != nil {
+			allTiles := map[string]map[string][]byte{}
+			tiles := tx.Bucket([]byte("tiles"))
+			err := tiles.ForEach(func(k, v []byte) error {
+				zoom := tiles.Bucket(k)
+				zoomTiles := map[string][]byte{}
+				allTiles[string(k)] = zoomTiles
+				return zoom.ForEach(func(tk, tv []byte) error {
+					zoomTiles[string(tk)] = tv
+					return nil
+				})
+			})
+			if err != nil {
+				return err
+			}
+			err = tx.DeleteBucket([]byte("tiles"))
+			if err != nil {
+				return err
+			}
+			tiles, err = tx.CreateBucket([]byte("tiles"))
+			if err != nil {
+				return err
+			}
+			maptiles, err := tiles.CreateBucket([]byte("0"))
+			if err != nil {
+				return err
+			}
+			for k, v := range allTiles {
+				zoom, err := maptiles.CreateBucket([]byte(k))
+				if err != nil {
+					return err
+				}
+				for tk, tv := range v {
+					err = zoom.Put([]byte(tk), tv)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	},
 }

@@ -3,6 +3,7 @@ import L, {Bounds, LatLng, Point, Util, Browser} from "leaflet"
 export const SmartTileLayer = L.TileLayer.extend({
     cache: {},
     invalidTile: "",
+    map: 0,
 
     getTileUrl: function(coords) {
 		return this.getTrueTileUrl(coords, this._getZoomForUrl());
@@ -13,7 +14,8 @@ export const SmartTileLayer = L.TileLayer.extend({
 			r: Browser.retina ? '@2x' : '',
 			s: this._getSubdomain(coords),
 			x: coords.x,
-			y: coords.y,
+            y: coords.y,
+            map: this.map,
             z: zoom
         };
 		if (this._map && !this._map.options.crs.infinite) {
@@ -24,7 +26,7 @@ export const SmartTileLayer = L.TileLayer.extend({
 			data['-y'] = invertedY;
         }
         
-        data['cache'] = this.cache[data['x'] + ':' + data['y'] + ':' + data['z']];
+        data['cache'] = this.cache[data['map'] + ':'+ data['x'] + ':' + data['y'] + ':' + data['z']];
 
         if(!data['cache'] || data['cache'] == -1) {
             return this.invalidTile;

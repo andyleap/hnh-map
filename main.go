@@ -29,7 +29,8 @@ type Map struct {
 
 	*webapp.WebApp
 
-	gridUpdates topic
+	gridUpdates  topic
+	mergeUpdates mergeTopic
 }
 
 type Session struct {
@@ -119,6 +120,7 @@ func main() {
 	http.HandleFunc("/map/api/admin/hideMarker", m.hideMarker)
 	http.HandleFunc("/map/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)
+	http.HandleFunc("/map/api/maps", m.getMaps)
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
 
 	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
@@ -130,6 +132,7 @@ func main() {
 type Character struct {
 	Name     string   `json:"name"`
 	ID       int      `json:"id"`
+	Map      int      `json:"map"`
 	Position Position `json:"position"`
 	Type     string   `json:"type"`
 	updated  time.Time
@@ -147,6 +150,7 @@ type Marker struct {
 type FrontendMarker struct {
 	Name     string   `json:"name"`
 	ID       int      `json:"id"`
+	Map      int      `json:"map"`
 	Position Position `json:"position"`
 	Image    string   `json:"image"`
 	Hidden   bool     `json:"hidden"`
@@ -156,6 +160,7 @@ type GridData struct {
 	ID         string
 	Coord      Coord
 	NextUpdate time.Time
+	Map        int
 }
 
 type Coord struct {
@@ -169,7 +174,7 @@ type Position struct {
 }
 
 func (c Coord) Name() string {
-	return fmt.Sprintf("%d_%d.png", c.X, c.Y)
+	return fmt.Sprintf("%d_%d", c.X, c.Y)
 }
 
 func (c Coord) Parent() Coord {

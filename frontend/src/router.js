@@ -8,6 +8,6 @@ export default new Router({
     routes: [
         {path: '/', component: MapView},
         {path: '/character/:characterId', component: MapView},
-        {path: '/grid/:gridX/:gridY/:zoom', component: MapView}
+        {path: '/grid/:map/:gridX/:gridY/:zoom', component: MapView}
     ]
 })
