@@ -36,8 +36,8 @@ export class Marker {
             let position = mapview.map.unproject([this.position.x, this.position.y], HnHMaxZoom);
             this.marker = L.marker(position, {icon: icon, title: this.name});
             this.marker.addTo(mapview.map);
-            this.marker.on("click", this.callClickCallback);
-            this.marker.on("contextmenu", this.callContextCallback);
+            this.marker.on("click", this.callClickCallback.bind(this));
+            this.marker.on("contextmenu", this.callContextCallback.bind(this));
         }
     }
 

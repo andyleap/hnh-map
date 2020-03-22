@@ -29,7 +29,7 @@ export class Character {
         if(this.map == mapview.mapid) {
             let position = mapview.map.unproject([this.position.x, this.position.y], HnHMaxZoom);
             this.marker = L.marker(position, {title: this.name});
-            this.marker.on("click", this.callCallback);
+            this.marker.on("click", this.callCallback.bind(this));
             this.marker.addTo(mapview.map)
         };
     }

@@ -92,10 +92,7 @@ func (m *Map) adminUser(rw http.ResponseWriter, req *http.Request) {
 			s.Auths = auths
 		}
 		if tempAdmin {
-			m.sessmu.Lock()
-			defer m.sessmu.Unlock()
-			s, _ := req.Cookie("session")
-			delete(m.sessions, s.Value)
+			m.deleteSession(s)
 		}
 		http.Redirect(rw, req, "/admin", 302)
 		return
@@ -275,10 +272,7 @@ func (m *Map) deleteUser(rw http.ResponseWriter, req *http.Request) {
 		return nil
 	})
 	if username == s.Username {
-		m.sessmu.Lock()
-		defer m.sessmu.Unlock()
-		s, _ := req.Cookie("session")
-		delete(m.sessions, s.Value)
+		m.deleteSession(s)
 	}
 	http.Redirect(rw, req, "/admin", 302)
 	return

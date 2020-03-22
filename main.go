@@ -24,9 +24,6 @@ type Map struct {
 	characters map[string]Character
 	chmu       sync.RWMutex
 
-	sessions map[string]*Session
-	sessmu   sync.RWMutex
-
 	*webapp.WebApp
 
 	gridUpdates  topic
@@ -34,6 +31,7 @@ type Map struct {
 }
 
 type Session struct {
+	ID       string
 	Username string
 	Auths    Auths
 }
@@ -64,8 +62,6 @@ func main() {
 		db:          db,
 
 		characters: map[string]Character{},
-
-		sessions: map[string]*Session{},
 
 		WebApp: webapp.Must(webapp.New().LoadTemplates("./templates/")),
 	}
@@ -214,13 +210,47 @@ type User struct {
 }
 
 func (m *Map) getSession(req *http.Request) *Session {
-	m.sessmu.RLock()
-	defer m.sessmu.RUnlock()
 	c, err := req.Cookie("session")
 	if err != nil {
 		return nil
 	}
-	return m.sessions[c.Value]
+	var s *Session
+	m.db.View(func(tx *bbolt.Tx) error {
+		sessions := tx.Bucket([]byte("sessions"))
+		if sessions == nil {
+			return nil
+		}
+		session := sessions.Get([]byte(c.Value))
+		if session == nil {
+			return nil
+		}
+		return json.Unmarshal(session, &s)
+	})
+	return s
+}
+
+func (m *Map) deleteSession(s *Session) {
+	m.db.Update(func(tx *bbolt.Tx) error {
+		sessions, err := tx.CreateBucketIfNotExists([]byte("sessions"))
+		if err != nil {
+			return err
+		}
+		return sessions.Delete([]byte(s.ID))
+	})
+}
+
+func (m *Map) saveSession(s *Session) {
+	m.db.Update(func(tx *bbolt.Tx) error {
+		sessions, err := tx.CreateBucketIfNotExists([]byte("sessions"))
+		if err != nil {
+			return err
+		}
+		buf, err := json.Marshal(s)
+		if err != nil {
+			return err
+		}
+		return sessions.Put([]byte(s.ID), buf)
+	})
 }
 
 type Page struct {

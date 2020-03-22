@@ -64,12 +64,12 @@ func (m *Map) login(rw http.ResponseWriter, req *http.Request) {
 				Expires: time.Now().Add(time.Hour * 24 * 7),
 				Value:   hex.EncodeToString(session),
 			})
-			m.sessmu.Lock()
-			defer m.sessmu.Unlock()
-			m.sessions[hex.EncodeToString(session)] = &Session{
+			s := &Session{
+				ID:       hex.EncodeToString(session),
 				Username: req.FormValue("user"),
 				Auths:    auths,
 			}
+			m.saveSession(s)
 			http.Redirect(rw, req, "/", 302)
 			return
 		}
