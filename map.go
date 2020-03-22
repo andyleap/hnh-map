@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 
 	"go.etcd.io/bbolt"
 )
@@ -51,7 +50,7 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 		return grid.ForEach(func(k, v []byte) error {
 			m := Marker{}
 			json.Unmarshal(v, &m)
-			graw := grids.Get([]byte(strconv.Itoa(m.GridID)))
+			graw := grids.Get([]byte(m.GridID))
 			if graw == nil {
 				return nil
 			}

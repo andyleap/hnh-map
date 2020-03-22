@@ -153,7 +153,7 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 	defer req.Body.Close()
 	markers := []struct {
 		Name   string
-		GridID int
+		GridID string
 		X, Y   int
 		Image  string
 		Type   string
@@ -170,7 +170,7 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 		log.Println("Original json: ", string(buf))
 		return
 	}
-	m.db.Update(func(tx *bbolt.Tx) error {
+	err = m.db.Update(func(tx *bbolt.Tx) error {
 		mb, err := tx.CreateBucketIfNotExists([]byte("markers"))
 		if err != nil {
 			return err
@@ -185,7 +185,7 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 		}
 
 		for _, mraw := range markers {
-			key := []byte(fmt.Sprintf("%d_%d_%d", mraw.GridID, mraw.X, mraw.Y))
+			key := []byte(fmt.Sprintf("%s_%d_%d", mraw.GridID, mraw.X, mraw.Y))
 			if grid.Get(key) != nil {
 				continue
 			}
@@ -213,6 +213,10 @@ func (m *Map) uploadMarkers(rw http.ResponseWriter, req *http.Request) {
 		}
 		return nil
 	})
+	if err != nil {
+		log.Println("Error update db: ", err)
+		return
+	}
 }
 
 func (m *Map) locate(rw http.ResponseWriter, req *http.Request) {

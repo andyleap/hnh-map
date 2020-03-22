@@ -141,7 +141,7 @@ type Character struct {
 type Marker struct {
 	Name     string   `json:"name"`
 	ID       int      `json:"id"`
-	GridID   int      `json:"string"`
+	GridID   string   `json:"gridID"`
 	Position Position `json:"position"`
 	Image    string   `json:"image"`
 	Hidden   bool     `json:"hidden"`
