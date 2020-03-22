@@ -348,7 +348,7 @@
             },
             hideMarker(data) {
                 this.$http.get(`${API_ENDPOINT}/admin/hideMarker`, {params: {id: data.id}});
-                this.markers.byId(data.id).remove(this.map);
+                this.markers.byId(data.id).remove(this);
             },
             changeMap(mapid) {
                 if(mapid != this.mapid) {
