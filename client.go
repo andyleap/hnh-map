@@ -26,6 +26,8 @@ var clientPath = regexp.MustCompile("client/([^/]+)/(.*)")
 
 var UserInfo struct{}
 
+const VERSION = "4"
+
 func (m *Map) client(rw http.ResponseWriter, req *http.Request) {
 	matches := clientPath.FindStringSubmatch(req.URL.Path)
 	if matches == nil {
@@ -82,6 +84,12 @@ func (m *Map) client(rw http.ResponseWriter, req *http.Request) {
 	m.mapdataIndex(rw, req)*/
 	case "":
 		http.Redirect(rw, req, "/map/", 302)
+	case "checkVersion":
+		if req.FormValue("version") == VERSION {
+			rw.WriteHeader(200)
+		} else {
+			rw.WriteHeader(http.StatusBadRequest)
+		}
 	default:
 		rw.WriteHeader(http.StatusNotFound)
 	}
