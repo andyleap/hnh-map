@@ -113,6 +113,7 @@ func main() {
 	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
 	http.HandleFunc("/map/api/config", m.config)
 	http.HandleFunc("/map/api/admin/wipeTile", m.wipeTile)
+	http.HandleFunc("/map/api/admin/setCoords", m.setCoords)
 	http.HandleFunc("/map/api/admin/hideMarker", m.hideMarker)
 	http.HandleFunc("/map/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)

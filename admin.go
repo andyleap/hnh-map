@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"go.etcd.io/bbolt"
 	"golang.org/x/crypto/bcrypt"
@@ -337,7 +338,120 @@ func (m *Map) wipeTile(rw http.ResponseWriter, req *http.Request) {
 		c = c.Parent()
 		m.updateZoomLevel(mapid, c, z)
 	}
-	http.Redirect(rw, req, "/admin/", 302)
+	rw.WriteHeader(200)
+}
+
+func (m *Map) setCoords(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+	mraw := req.FormValue("map")
+	mapid, err := strconv.Atoi(mraw)
+	if err != nil {
+		http.Error(rw, "coord parse failed", http.StatusBadRequest)
+	}
+	fxraw := req.FormValue("fx")
+	fx, err := strconv.Atoi(fxraw)
+	if err != nil {
+		http.Error(rw, "coord parse failed", http.StatusBadRequest)
+	}
+	fyraw := req.FormValue("fy")
+	fy, err := strconv.Atoi(fyraw)
+	if err != nil {
+		http.Error(rw, "coord parse failed", http.StatusBadRequest)
+	}
+	fc := Coord{
+		X: fx,
+		Y: fy,
+	}
+
+	txraw := req.FormValue("tx")
+	tx, err := strconv.Atoi(txraw)
+	if err != nil {
+		http.Error(rw, "coord parse failed", http.StatusBadRequest)
+	}
+	tyraw := req.FormValue("ty")
+	ty, err := strconv.Atoi(tyraw)
+	if err != nil {
+		http.Error(rw, "coord parse failed", http.StatusBadRequest)
+	}
+	tc := Coord{
+		X: tx,
+		Y: ty,
+	}
+
+	diff := Coord{
+		X: tc.X - fc.X,
+		Y: tc.Y - fc.Y,
+	}
+	tds := []*TileData{}
+	m.db.Update(func(tx *bbolt.Tx) error {
+		grids := tx.Bucket([]byte("grids"))
+		if grids == nil {
+			return nil
+		}
+		tiles := tx.Bucket([]byte("tiles"))
+		if tiles == nil {
+			return nil
+		}
+		mapZooms := tiles.Bucket([]byte(strconv.Itoa(mapid)))
+		if mapZooms == nil {
+			return nil
+		}
+		mapTiles := mapZooms.Bucket([]byte("0"))
+		err := grids.ForEach(func(k, v []byte) error {
+			g := GridData{}
+			err := json.Unmarshal(v, &g)
+			if err != nil {
+				return err
+			}
+			if g.Map == mapid {
+				g.Coord.X += diff.X
+				g.Coord.Y += diff.Y
+				raw, _ := json.Marshal(g)
+				grids.Put(k, raw)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		err = mapTiles.ForEach(func(k, v []byte) error {
+			td := &TileData{}
+			err := json.Unmarshal(v, &td)
+			if err != nil {
+				return err
+			}
+			td.Coord.X += diff.X
+			td.Coord.Y += diff.Y
+			tds = append(tds, td)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		err = tiles.DeleteBucket([]byte(strconv.Itoa(mapid)))
+		if err != nil {
+			return err
+		}
+		return nil
+	})
+	needProcess := map[zoomproc]struct{}{}
+	for _, td := range tds {
+		m.SaveTile(td.MapID, td.Coord, td.Zoom, td.File, time.Now().UnixNano())
+		needProcess[zoomproc{c: Coord{X: td.Coord.X, Y: td.Coord.Y}.Parent(), m: td.MapID}] = struct{}{}
+	}
+	for z := 1; z <= 5; z++ {
+		process := needProcess
+		needProcess = map[zoomproc]struct{}{}
+		for p := range process {
+			m.updateZoomLevel(p.m, p.c, z)
+			needProcess[zoomproc{p.c.Parent(), p.m}] = struct{}{}
+		}
+	}
+	rw.WriteHeader(200)
 }
 
 func (m *Map) backup(rw http.ResponseWriter, req *http.Request) {
@@ -394,6 +508,62 @@ func (m *Map) backup(rw http.ResponseWriter, req *http.Request) {
 	}
 
 }
+
+/*
+func (m *Map) gridData(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	rw.Header().Set("Content-Type", "application/zip")
+	rw.Header().Set("Content-Disposition", "attachment; filename=\"griddata.zip\"")
+
+	zw := zip.NewWriter(rw)
+	defer zw.Close()
+
+	err := m.db.Update(func(tx *bbolt.Tx) error {
+		w, err := zw.Create("grids.json")
+		if err != nil {
+			return err
+		}
+		tx.Bucket([]byte("grids"))
+
+		json.NewEncoder(w).Encode()
+
+		tiles := tx.Bucket([]byte("tiles"))
+		if tiles == nil {
+			return nil
+		}
+		zoom := tiles.Bucket([]byte("0"))
+		if zoom == nil {
+			return nil
+		}
+		return zoom.ForEach(func(k, v []byte) error {
+			td := TileData{}
+			json.Unmarshal(v, &td)
+			if td.File == "" {
+				return nil
+			}
+			f, err := os.Open(m.gridStorage + "/" + td.File)
+			if err != nil {
+				return nil
+			}
+			defer f.Close()
+			w, err := zw.Create(td.File)
+			if err != nil {
+				return err
+			}
+			_, err = io.Copy(w, f)
+			return err
+		})
+	})
+	if err != nil {
+		log.Println(err)
+	}
+
+}
+*/
 
 func (m *Map) hideMarker(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)

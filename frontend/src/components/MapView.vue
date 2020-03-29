@@ -19,6 +19,10 @@
                     <model-select :options="maps" v-model="selectedMap" placeholder="Select Map"></model-select>
                 </div>
                 <div class="form-group">
+                    <label>Overlay Map</label>
+                    <model-select :options="maps" v-model="overlayMap" placeholder="Select Map"></model-select>
+                </div>
+                <div class="form-group">
                     <label>Jump to Quest Giver</label>
                     <model-select :options="questGivers" v-model="selectedMarker"
                                   placeholder="Select Quest Giver"></model-select>
@@ -34,6 +38,9 @@
                 <li>
                     <a @click.prevent="wipeTile(tile.data)">Wipe tile {{ tile.data.coords.x }}, {{ tile.data.coords.y }}</a>
                 </li>
+                <li>
+                    <a @click.prevent="queryCoordSet(tile.data)">Rewrite tile coords for {{ tile.data.coords.x }}, {{ tile.data.coords.y }}</a>
+                </li>
             </template>
         </vue-context>
 
@@ -44,6 +51,13 @@
                 </li>
             </template>
         </vue-context>
+        <modal name="coordSet">
+            <form v-on:submit.prevent="setCoords(form)"> 
+                <input v-model="coordSet.x" class="input" type="text" placeholder="0">
+                <input v-model="coordSet.y" class="input" type="text" placeholder="0">
+                <button class="button is-primary">Submit</button>
+            </form>
+        </modal>
     </div>
 </template>
 
@@ -57,13 +71,12 @@
     import {UniqueList} from "../data/UniqueList";
     import {Character} from "../data/Character";
     import { VueContext } from 'vue-context';
-    
 
     export default {
         name: "MapView",
         components: {
             ModelSelect,
-            VueContext
+            VueContext,
         },
         data: function () {
             return {
@@ -81,8 +94,14 @@
                 selectedMap: {value: false},
                 selectedMarker: {value: false},
                 selectedPlayer: {value: false},
+                overlayMap: {value: false},
                 auths: [],
                 mapid: 0,
+                coordSetFrom: {x: 0, y: 0},
+                coordSet: {
+                    x: 0,
+                    y: 0
+                }
             }
         },
         watch: {
@@ -118,6 +137,15 @@
                     this.map.setView([0, 0], zoom);
                     
                     this.$router.replace({path: `/grid/${this.mapid}/0/0/${zoom}`});
+                }
+            },
+            overlayMap(value) {
+                if (value) {
+                    this.overlayLayer.map = value.id;
+                    this.overlayLayer.redraw();
+                } else {
+                    this.overlayLayer.map = -1;
+                    this.overlayLayer.redraw();
                 }
             },
             selectedMarker(value) {
@@ -193,6 +221,10 @@
                 this.layer = new SmartTileLayer('grids/{map}/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: TileSize});
                 this.layer.invalidTile = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
                 this.layer.addTo(this.map);
+
+                this.overlayLayer = new SmartTileLayer('grids/{map}/{z}/{x}_{y}.png?{cache}', {minZoom: 1, maxZoom: 6, zoomOffset:0, zoomReverse: true, tileSize: TileSize, opacity: 0.5});
+                this.overlayLayer.invalidTile = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+                this.overlayLayer.addTo(this.map);
 
                 this.coordLayer = new GridCoordLayer({tileSize: TileSize, opacity: 0});
                 this.coordLayer.addTo(this.map);
@@ -350,11 +382,26 @@
                 this.$http.get(`${API_ENDPOINT}/admin/hideMarker`, {params: {id: data.id}});
                 this.markers.byId(data.id).remove(this);
             },
+            queryCoordSet(data) {
+                this.coordSetFrom = data.coords;
+                this.$modal.show('coordSet');
+            },
+            setCoords(form) {
+                this.$http.get(`${API_ENDPOINT}/admin/setCoords`, {params: {
+                    map: this.mapid,
+                    fx: this.coordSetFrom.x, 
+                    fy: this.coordSetFrom.y,
+                    tx: this.coordSet.x, 
+                    ty: this.coordSet.y,
+                }});
+            },
             changeMap(mapid) {
                 if(mapid != this.mapid) {
                     this.mapid = mapid;
                     this.layer.map = this.mapid;
                     this.layer.redraw();
+                    this.overlayLayer.map = -1;
+                    this.overlayLayer.redraw();
                     this.markers.getElements().forEach(it => {
                         it.remove(this);
                         it.add(this);

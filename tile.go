@@ -231,6 +231,7 @@ func (m *Map) gridTile(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	td := m.GetTile(mapid, Coord{X: x, Y: y}, z)
+
 	if td == nil {
 		http.Error(rw, "file not found", 404)
 		return

@@ -325,9 +325,13 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 			return nil
 		}
 
-		mapid := 0
+		mapid := -1
 		offset := struct{ X, Y int }{}
-		for mapid, offset = range maps {
+		for id, off := range maps {
+			if id < mapid || mapid == -1 {
+				mapid = id
+				offset = off
+			}
 		}
 
 		log.Println("Client in mapid ", mapid)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -64,14 +65,17 @@ var migrations = []func(tx *bbolt.Tx) error{
 	},
 	func(tx *bbolt.Tx) error {
 		if tx.Bucket([]byte("tiles")) != nil {
-			allTiles := map[string]map[string][]byte{}
+			allTiles := map[string]map[string]TileData{}
 			tiles := tx.Bucket([]byte("tiles"))
 			err := tiles.ForEach(func(k, v []byte) error {
 				zoom := tiles.Bucket(k)
-				zoomTiles := map[string][]byte{}
+				zoomTiles := map[string]TileData{}
+
 				allTiles[string(k)] = zoomTiles
 				return zoom.ForEach(func(tk, tv []byte) error {
-					zoomTiles[string(tk)] = tv
+					td := TileData{}
+					json.Unmarshal(tv, &td)
+					zoomTiles[string(tk)] = td
 					return nil
 				})
 			})
@@ -96,11 +100,16 @@ var migrations = []func(tx *bbolt.Tx) error{
 					return err
 				}
 				for tk, tv := range v {
-					err = zoom.Put([]byte(tk), tv)
+					raw, _ := json.Marshal(tv)
+					err = zoom.Put([]byte(strings.TrimSuffix(tk, ".png")), raw)
 					if err != nil {
 						return err
 					}
 				}
+			}
+			err = tiles.SetSequence(1)
+			if err != nil {
+				return err
 			}
 		}
 		return nil
