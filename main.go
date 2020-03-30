@@ -105,7 +105,7 @@ func main() {
 	http.HandleFunc("/admin/setPrefix", m.setPrefix)
 	http.HandleFunc("/admin/setTitle", m.setTitle)
 	http.HandleFunc("/admin/rebuildZooms", m.rebuildZooms)
-	http.HandleFunc("/admin/backup", m.backup)
+	http.HandleFunc("/admin/export", m.export)
 	http.HandleFunc("/admin/merge", m.merge)
 
 	// Map frontend endpoints

@@ -541,7 +541,7 @@ func (m *Map) gridUpload(rw http.ResponseWriter, req *http.Request) {
 
 func (m *Map) updateZoomLevel(mapid int, c Coord, z int) {
 	img := image.NewNRGBA(image.Rect(0, 0, 100, 100))
-	draw.Draw(img, img.Bounds(), image.Black, image.Point{}, draw.Src)
+	draw.Draw(img, img.Bounds(), image.Transparent, image.Point{}, draw.Src)
 	for x := 0; x <= 1; x++ {
 		for y := 0; y <= 1; y++ {
 			subC := c
@@ -562,7 +562,7 @@ func (m *Map) updateZoomLevel(mapid int, c Coord, z int) {
 			if err != nil {
 				continue
 			}
-			draw.BiLinear.Scale(img, image.Rect(50*x, 50*y, 50*x+50, 50*y+50), subimg, subimg.Bounds(), draw.Over, nil)
+			draw.BiLinear.Scale(img, image.Rect(50*x, 50*y, 50*x+50, 50*y+50), subimg, subimg.Bounds(), draw.Src, nil)
 		}
 	}
 	os.MkdirAll(fmt.Sprintf("%s/%d/%d", m.gridStorage, mapid, z), 0600)

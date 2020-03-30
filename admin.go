@@ -9,7 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -509,8 +511,12 @@ func (m *Map) backup(rw http.ResponseWriter, req *http.Request) {
 
 }
 
-/*
-func (m *Map) gridData(rw http.ResponseWriter, req *http.Request) {
+type mapData struct {
+	Grids   map[string]string
+	Markers map[string][]Marker
+}
+
+func (m *Map) export(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
 	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
 		http.Error(rw, "Unauthorized", http.StatusUnauthorized)
@@ -523,47 +529,106 @@ func (m *Map) gridData(rw http.ResponseWriter, req *http.Request) {
 	defer zw.Close()
 
 	err := m.db.Update(func(tx *bbolt.Tx) error {
-		w, err := zw.Create("grids.json")
-		if err != nil {
-			return err
+		maps := map[int]mapData{}
+		gridMap := map[string]int{}
+
+		grids := tx.Bucket([]byte("grids"))
+		if grids == nil {
+			return nil
 		}
-		tx.Bucket([]byte("grids"))
-
-		json.NewEncoder(w).Encode()
-
 		tiles := tx.Bucket([]byte("tiles"))
 		if tiles == nil {
 			return nil
 		}
-		zoom := tiles.Bucket([]byte("0"))
-		if zoom == nil {
-			return nil
-		}
-		return zoom.ForEach(func(k, v []byte) error {
-			td := TileData{}
-			json.Unmarshal(v, &td)
-			if td.File == "" {
-				return nil
-			}
-			f, err := os.Open(m.gridStorage + "/" + td.File)
-			if err != nil {
-				return nil
-			}
-			defer f.Close()
-			w, err := zw.Create(td.File)
+
+		err := grids.ForEach(func(k, v []byte) error {
+			gd := GridData{}
+			err := json.Unmarshal(v, &gd)
 			if err != nil {
 				return err
 			}
-			_, err = io.Copy(w, f)
-			return err
+			md, ok := maps[gd.Map]
+			if !ok {
+				md = mapData{
+					Grids:   map[string]string{},
+					Markers: map[string][]Marker{},
+				}
+				maps[gd.Map] = md
+			}
+			md.Grids[gd.Coord.Name()] = gd.ID
+			gridMap[gd.ID] = gd.Map
+			mapb := tiles.Bucket([]byte(strconv.Itoa(gd.Map)))
+			if mapb == nil {
+				return nil
+			}
+			zoom := mapb.Bucket([]byte("0"))
+			if zoom == nil {
+				return nil
+			}
+			tdraw := zoom.Get([]byte(gd.Coord.Name()))
+			if tdraw == nil {
+				return nil
+			}
+			td := TileData{}
+			err = json.Unmarshal(tdraw, &td)
+			if err != nil {
+				return err
+			}
+			w, err := zw.Create(fmt.Sprintf("%d/%s.png", gd.Map, gd.ID))
+			if err != nil {
+				return err
+			}
+			f, err := os.Open(filepath.Join(m.gridStorage, td.File))
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+			io.Copy(w, f)
+			return nil
 		})
+		if err != nil {
+			return err
+		}
+
+		err = func() error {
+			markersb := tx.Bucket([]byte("markers"))
+			if markersb == nil {
+				return nil
+			}
+			markersgrid := markersb.Bucket([]byte("grid"))
+			if markersgrid == nil {
+				return nil
+			}
+			return markersgrid.ForEach(func(k, v []byte) error {
+				m := Marker{}
+				err := json.Unmarshal(v, &m)
+				if err != nil {
+					return nil
+				}
+				if _, ok := maps[gridMap[m.GridID]]; ok {
+					maps[gridMap[m.GridID]].Markers[m.GridID] = append(maps[gridMap[m.GridID]].Markers[m.GridID], m)
+				}
+				return nil
+			})
+		}()
+		if err != nil {
+			return err
+		}
+
+		for mapid, mapdata := range maps {
+			w, err := zw.Create(fmt.Sprintf("%d/grids.json", mapid))
+			if err != nil {
+				return err
+			}
+			json.NewEncoder(w).Encode(mapdata)
+		}
+		return nil
 	})
 	if err != nil {
 		log.Println(err)
 	}
 
 }
-*/
 
 func (m *Map) hideMarker(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
@@ -607,210 +672,259 @@ func (m *Map) hideMarker(rw http.ResponseWriter, req *http.Request) {
 }
 
 func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
-	/*
-		err := req.ParseMultipartForm(1024 * 1024 * 500)
-		if err != nil {
-			log.Println(err)
-			http.Error(rw, "internal error", http.StatusInternalServerError)
-			return
-		}
-		mergef, hdr, err := req.FormFile("merge")
-		if err != nil {
-			log.Println(err)
-			http.Error(rw, "request error", http.StatusBadRequest)
-			return
-		}
-		zr, err := zip.NewReader(mergef, hdr.Size)
-		if err != nil {
-			log.Println(err)
-			http.Error(rw, "request error", http.StatusBadRequest)
-			return
-		}
-		dbf, err := ioutil.TempFile("", "grids*.db")
-		if err != nil {
-			log.Println(err)
-			http.Error(rw, "internal error", http.StatusInternalServerError)
-			return
-		}
+	err := req.ParseMultipartForm(1024 * 1024 * 500)
+	if err != nil {
+		log.Println(err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+	mergef, hdr, err := req.FormFile("merge")
+	if err != nil {
+		log.Println(err)
+		http.Error(rw, "request error", http.StatusBadRequest)
+		return
+	}
+	zr, err := zip.NewReader(mergef, hdr.Size)
+	if err != nil {
+		log.Println(err)
+		http.Error(rw, "request error", http.StatusBadRequest)
+		return
+	}
 
+	ops := []struct {
+		mapid int
+		x, y  int
+		f     string
+	}{}
+	newTiles := map[string]struct{}{}
+
+	err = m.db.Update(func(tx *bbolt.Tx) error {
+		grids, err := tx.CreateBucketIfNotExists([]byte("grids"))
+		if err != nil {
+			return err
+		}
+		tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
+		if err != nil {
+			return err
+		}
+		mb, err := tx.CreateBucketIfNotExists([]byte("markers"))
+		if err != nil {
+			return err
+		}
+		mgrid, err := mb.CreateBucketIfNotExists([]byte("grid"))
+		if err != nil {
+			return err
+		}
+		idB, err := mb.CreateBucketIfNotExists([]byte("id"))
+		if err != nil {
+			return err
+		}
 		for _, fhdr := range zr.File {
-			if fhdr.Name == "grids.db" {
-				r, err := fhdr.Open()
+			if strings.HasSuffix(fhdr.Name, ".json") {
+				f, err := fhdr.Open()
 				if err != nil {
-					dbf.Close()
-					log.Println(err)
-					http.Error(rw, "internal error", http.StatusInternalServerError)
-					return
+					return err
 				}
-				_, err = io.Copy(dbf, r)
+				md := mapData{}
+				err = json.NewDecoder(f).Decode(&md)
 				if err != nil {
-					dbf.Close()
-					log.Println(err)
-					http.Error(rw, "internal error", http.StatusInternalServerError)
-					return
+					return err
 				}
-				r.Close()
-				break
-			}
-		}
 
-		dbname := dbf.Name()
-		dbf.Close()
-		db, err := bbolt.Open(dbname, 0600, nil)
-		if err != nil {
-			log.Println(err)
-			http.Error(rw, "internal error", http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			db.Close()
-			os.Remove(dbf.Name())
-		}()
-
-		ops := []struct {
-			x, y int
-			f    string
-		}{}
-
-		err = db.View(func(mtx *bbolt.Tx) error {
-			return m.db.Update(func(ttx *bbolt.Tx) error {
-				{
-					mv := 0
-					{
-						b := mtx.Bucket([]byte("config"))
-						if b == nil {
-							return fmt.Errorf("no config bucket")
+				for _, ms := range md.Markers {
+					for _, mraw := range ms {
+						key := []byte(fmt.Sprintf("%s_%d_%d", mraw.GridID, mraw.Position.X, mraw.Position.Y))
+						if mgrid.Get(key) != nil {
+							continue
 						}
-						vraw := b.Get([]byte("version"))
-						mv, _ = strconv.Atoi(string(vraw))
-					}
-					tv := 0
-					{
-						b, err := ttx.CreateBucketIfNotExists([]byte("config"))
+						if mraw.Image == "" {
+							mraw.Image = "gfx/terobjs/mm/custom"
+						}
+						id, err := idB.NextSequence()
 						if err != nil {
 							return err
 						}
-						vraw := b.Get([]byte("version"))
-						tv, _ = strconv.Atoi(string(vraw))
-					}
-					if mv != tv {
-						return fmt.Errorf("Version %d does not match %d", mv, tv)
-					}
-				}
-				locked := false
-				offset := Coord{}
-				mgrids := mtx.Bucket([]byte("grids"))
-				tgrids := ttx.Bucket([]byte("grids"))
-				if mgrids == nil {
-					return fmt.Errorf("Merge source grids missing, cancelling merge")
-				}
-				if tgrids != nil {
-					err = mgrids.ForEach(func(k, v []byte) error {
-						tgrid := tgrids.Get(k)
-						if tgrid != nil {
-							tg := GridData{}
-							mg := GridData{}
-							json.Unmarshal(tgrid, &tg)
-							json.Unmarshal(v, &mg)
-							locked = true
-							offset.X = tg.Coord.X - mg.Coord.X
-							offset.Y = tg.Coord.Y - mg.Coord.Y
-							return errFound
+						idKey := []byte(strconv.Itoa(int(id)))
+						m := Marker{
+							Name:   mraw.Name,
+							ID:     int(id),
+							GridID: mraw.GridID,
+							Position: Position{
+								X: mraw.Position.X,
+								Y: mraw.Position.Y,
+							},
+							Image: mraw.Image,
 						}
-						return nil
-					})
-					if err != errFound && err != nil {
-						return err
+						raw, _ := json.Marshal(m)
+						mgrid.Put(key, raw)
+						idB.Put(idKey, key)
 					}
-				} else {
-					locked = true
-				}
-				if !locked {
-					return fmt.Errorf("Map grids do not intersect, cancelling merge")
 				}
 
-				ttiles, err := ttx.CreateBucketIfNotExists([]byte("tiles"))
-				if err != nil {
-					return err
-				}
-				tzoom, err := ttiles.CreateBucketIfNotExists([]byte("0"))
-				if err != nil {
-					return err
-				}
-				mtiles := mtx.Bucket([]byte("tiles"))
-				if ttiles == nil {
-					return nil
-				}
-				mzoom := mtiles.Bucket([]byte("0"))
-				if tzoom == nil {
-					return nil
-				}
-
-				err = mgrids.ForEach(func(k, v []byte) error {
-					mg := GridData{}
-					json.Unmarshal(v, &mg)
-
-					td := TileData{}
-					tileraw := mzoom.Get([]byte(mg.Coord.Name()))
-					if tileraw == nil {
-						return nil
-					}
-					json.Unmarshal(tileraw, &td)
-					for _, tf := range zr.File {
-						if tf.Name == td.File {
-							tfr, err := tf.Open()
-							if err != nil {
-								return err
-							}
-							defer tfr.Close()
-							tfw, err := os.Create(m.gridStorage + "/0/" + string(k) + ".png")
-							ops = append(ops, struct {
-								x int
-								y int
-								f string
-							}{
-								x: td.Coord.X + offset.X,
-								y: td.Coord.Y + offset.Y,
-								f: "0/" + string(k) + ".png",
-							})
-							if err != nil {
-								return err
-							}
-							_, err = io.Copy(tfw, tfr)
-							if err != nil {
-								return err
-							}
-							break
-						}
-					}
-
-					mg.Coord.X += offset.X
-					mg.Coord.Y += offset.Y
-					raw, _ := json.Marshal(mg)
-					err := tgrids.Put(k, raw)
+				newGrids := map[Coord]string{}
+				maps := map[int]struct{ X, Y int }{}
+				for k, v := range md.Grids {
+					c := Coord{}
+					_, err := fmt.Sscanf(k, "%d_%d", &c.X, &c.Y)
 					if err != nil {
 						return err
 					}
+					newGrids[c] = v
+					gridRaw := grids.Get([]byte(v))
+					if gridRaw != nil {
+						gd := GridData{}
+						json.Unmarshal(gridRaw, &gd)
+						maps[gd.Map] = struct{ X, Y int }{gd.Coord.X - c.X, gd.Coord.Y - c.Y}
+					}
+				}
+				if len(maps) == 0 {
+					tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
+					if err != nil {
+						return err
+					}
+					seq, err := tiles.NextSequence()
+					if err != nil {
+						return err
+					}
+					for c, grid := range newGrids {
+						cur := GridData{}
+						cur.ID = grid
+						cur.Map = int(seq)
+						cur.Coord = c
 
-					return nil
-				})
+						raw, err := json.Marshal(cur)
+						if err != nil {
+							return err
+						}
+						grids.Put([]byte(grid), raw)
+					}
+					continue
+				}
+
+				mapid := -1
+				offset := struct{ X, Y int }{}
+				for id, off := range maps {
+					if id < mapid || mapid == -1 {
+						mapid = id
+						offset = off
+					}
+				}
+
+				for c, grid := range newGrids {
+					cur := GridData{}
+					if curRaw := grids.Get([]byte(grid)); curRaw != nil {
+						continue
+					}
+
+					cur.ID = grid
+					cur.Map = mapid
+					cur.Coord.X = c.X + offset.X
+					cur.Coord.Y = c.Y + offset.Y
+					raw, err := json.Marshal(cur)
+					if err != nil {
+						return err
+					}
+					grids.Put([]byte(grid), raw)
+				}
+				if len(maps) > 1 {
+					grids.ForEach(func(k, v []byte) error {
+						gd := GridData{}
+						json.Unmarshal(v, &gd)
+						if gd.Map == mapid {
+							return nil
+						}
+						if merge, ok := maps[gd.Map]; ok {
+							var td *TileData
+							mapb, err := tiles.CreateBucketIfNotExists([]byte(strconv.Itoa(gd.Map)))
+							if err != nil {
+								return err
+							}
+							zoom, err := mapb.CreateBucketIfNotExists([]byte(strconv.Itoa(0)))
+							if err != nil {
+								return err
+							}
+							tileraw := zoom.Get([]byte(gd.Coord.Name()))
+							if tileraw != nil {
+								json.Unmarshal(tileraw, &td)
+							}
+
+							gd.Map = mapid
+							gd.Coord.X += offset.X - merge.X
+							gd.Coord.Y += offset.Y - merge.Y
+							raw, _ := json.Marshal(gd)
+							if td != nil {
+								ops = append(ops, struct {
+									mapid int
+									x     int
+									y     int
+									f     string
+								}{
+									mapid: mapid,
+									x:     gd.Coord.X,
+									y:     gd.Coord.Y,
+									f:     td.File,
+								})
+							}
+							grids.Put(k, raw)
+						}
+						return nil
+					})
+				}
+				for mergeid, merge := range maps {
+					if mapid == mergeid {
+						continue
+					}
+					log.Println("Reporting merge", mergeid, mapid)
+					m.reportMerge(mergeid, mapid, Coord{X: offset.X - merge.X, Y: offset.Y - merge.Y})
+				}
+
+			} else if strings.HasSuffix(fhdr.Name, ".png") {
+				os.MkdirAll(filepath.Join(m.gridStorage, "grids"), 0777)
+				f, err := os.Create(filepath.Join(m.gridStorage, "grids", filepath.Base(fhdr.Name)))
 				if err != nil {
 					return err
 				}
-
-				return nil
-			})
-		})
-
-		if err != nil {
-			log.Println(err)
-			http.Error(rw, "internal error", http.StatusInternalServerError)
-			return
+				r, err := fhdr.Open()
+				if err != nil {
+					f.Close()
+					return err
+				}
+				io.Copy(f, r)
+				r.Close()
+				f.Close()
+				newTiles[strings.TrimSuffix(filepath.Base(fhdr.Name), ".png")] = struct{}{}
+			}
 		}
 
-		for _, op := range ops {
-			m.SaveTile(Coord{X: op.x, Y: op.y}, 0, op.f, time.Now().UnixNano())
+		for gid := range newTiles {
+			gridRaw := grids.Get([]byte(gid))
+			if gridRaw != nil {
+				gd := GridData{}
+				json.Unmarshal(gridRaw, &gd)
+				ops = append(ops, struct {
+					mapid int
+					x     int
+					y     int
+					f     string
+				}{
+					mapid: gd.Map,
+					x:     gd.Coord.X,
+					y:     gd.Coord.Y,
+					f:     filepath.Join("grids", gid+".png"),
+				})
+			}
 		}
-		m.rebuildZooms(rw, req)
-	*/
+		return nil
+	})
+
+	if err != nil {
+		log.Println(err)
+		http.Error(rw, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	for _, op := range ops {
+		m.SaveTile(op.mapid, Coord{X: op.x, Y: op.y}, 0, op.f, time.Now().UnixNano())
+	}
+	m.rebuildZooms(rw, req)
 }
