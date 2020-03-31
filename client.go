@@ -365,7 +365,6 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 			greq.Map = cur.Map
 			greq.Coords = cur.Coord
 		}
-		return nil
 		if len(maps) > 1 {
 			grids.ForEach(func(k, v []byte) error {
 				gd := GridData{}
@@ -417,6 +416,7 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 			log.Println("Reporting merge", mergeid, mapid)
 			m.reportMerge(mergeid, mapid, Coord{X: offset.X - merge.X, Y: offset.Y - merge.Y})
 		}
+		return nil
 	})
 	if err != nil {
 		log.Println(err)
