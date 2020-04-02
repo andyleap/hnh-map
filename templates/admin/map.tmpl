@@ -1,0 +1,44 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+		<style>
+		</style>
+        <title>{{.Page.Title}} - Admin</title>
+	</head>
+	<body>
+		<div class="container">
+            <form method="POST">
+                <input type="hidden" name="map" value="{{.MapInfo.ID}}">
+                <div class="row">
+                    <div class="input-field col s12">
+                        <input id="name" type="text" class="validate" name="name" value="{{.MapInfo.Name}}">
+                        <label for="username">Name</label>
+                    </div>
+                </div>
+                <div class="col s12">
+                    <ul class="collection with-header">
+                        <li class="collection-item">
+                            <label>
+                                <input type="checkbox" name="hidden" value="true"{{if .MapInfo.Hidden}} checked="checked"{{end}}/>
+                                <span>Hidden</span>
+                            </label>
+                        </li>
+                        <li class="collection-item">
+                            <label>
+                                <input type="checkbox" name="priority" value="true"{{if .MapInfo.Priority}} checked="checked"{{end}}/>
+                                <span>Priority</span>
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+                <button class="btn waves-effect waves-light" type="submit" name="action">Save</button>
+            </form>
+		</div>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <script>M.AutoInit();</script>
+	</body>
+</html>

@@ -107,6 +107,7 @@ func main() {
 	http.HandleFunc("/admin/rebuildZooms", m.rebuildZooms)
 	http.HandleFunc("/admin/export", m.export)
 	http.HandleFunc("/admin/merge", m.merge)
+	http.HandleFunc("/admin/map", m.adminMap)
 
 	// Map frontend endpoints
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
@@ -151,6 +152,13 @@ type FrontendMarker struct {
 	Position Position `json:"position"`
 	Image    string   `json:"image"`
 	Hidden   bool     `json:"hidden"`
+}
+
+type MapInfo struct {
+	ID       int
+	Name     string
+	Hidden   bool
+	Priority bool
 }
 
 type GridData struct {

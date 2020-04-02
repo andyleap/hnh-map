@@ -30,6 +30,22 @@
             </table>
             <a href="/admin/user" class="waves-effect waves-light btn">Add user</a>
             <br>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Map</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Maps}}
+                    <tr>
+                        <td>{{.Name}}</td>
+                        <td><a href="/admin/map?map={{.ID}}" class="waves-effect waves-light btn">Edit</a></td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
             <div class="card">
                 <div class="card-content">
                     <h5>Set prefix for tokens</h5>
