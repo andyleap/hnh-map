@@ -376,7 +376,7 @@
                 this.map.setView([0, 0], HnHMinZoom);
             },
             wipeTile(data) {
-                this.$http.get(`${API_ENDPOINT}/admin/wipeTile`, {params: data.coords + {map: this.mapid} });
+                this.$http.get(`${API_ENDPOINT}/admin/wipeTile`, {params: {...data.coords, map: this.mapid} });
             },
             hideMarker(data) {
                 this.$http.get(`${API_ENDPOINT}/admin/hideMarker`, {params: {id: data.id}});
