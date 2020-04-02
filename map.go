@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"go.etcd.io/bbolt"
 )
@@ -73,11 +74,6 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 	json.NewEncoder(rw).Encode(markers)
 }
 
-type MapInfo struct {
-	ID   int `json:"id"`
-	Size int `json:"size"`
-}
-
 func (m *Map) getMaps(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
 	if s == nil || !s.Auths.Has(AUTH_MAP) {
@@ -86,21 +82,21 @@ func (m *Map) getMaps(rw http.ResponseWriter, req *http.Request) {
 	}
 	maps := map[int]*MapInfo{}
 	m.db.View(func(tx *bbolt.Tx) error {
-		grids := tx.Bucket([]byte("grids"))
-		if grids == nil {
+		mapB := tx.Bucket([]byte("maps"))
+		if maps == nil {
 			return nil
 		}
-		return grids.ForEach(func(k, v []byte) error {
-			gd := GridData{}
-			json.Unmarshal(v, &gd)
-			mapInfo := maps[gd.Map]
-			if mapInfo == nil {
-				mapInfo = &MapInfo{
-					ID: gd.Map,
-				}
-				maps[gd.Map] = mapInfo
+		return mapB.ForEach(func(k, v []byte) error {
+			mapid, err := strconv.Atoi(string(k))
+			if err != nil {
+				return nil
 			}
-			mapInfo.Size++
+			mi := &MapInfo{}
+			json.Unmarshal(v, &mi)
+			if mi.Hidden {
+				return nil
+			}
+			maps[mapid] = mi
 			return nil
 		})
 	})

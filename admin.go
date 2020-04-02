@@ -27,6 +27,7 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 
 	users := []string{}
 	prefix := ""
+	maps := []MapInfo{}
 	m.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		if b == nil {
@@ -35,6 +36,15 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 		config := tx.Bucket([]byte("config"))
 		if config != nil {
 			prefix = string(config.Get([]byte("prefix")))
+		}
+		mapB := tx.Bucket([]byte("maps"))
+		if mapB != nil {
+			mapB.ForEach(func(k, v []byte) error {
+				mi := MapInfo{}
+				json.Unmarshal(v, &mi)
+				maps = append(maps, mi)
+				return nil
+			})
 		}
 		return b.ForEach(func(k, v []byte) error {
 			users = append(users, string(k))
@@ -47,11 +57,13 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 		Session *Session
 		Users   []string
 		Prefix  string
+		Maps    []MapInfo
 	}{
 		Page:    m.getPage(req),
 		Session: s,
 		Users:   users,
 		Prefix:  prefix,
+		Maps:    maps,
 	})
 }
 
@@ -762,6 +774,11 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 					}
 				}
 
+				mapB, err := tx.CreateBucketIfNotExists([]byte("maps"))
+				if err != nil {
+					return err
+				}
+
 				newGrids := map[Coord]string{}
 				maps := map[int]struct{ X, Y int }{}
 				for k, v := range md.Grids {
@@ -779,11 +796,17 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 					}
 				}
 				if len(maps) == 0 {
-					tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
+					seq, err := mapB.NextSequence()
 					if err != nil {
 						return err
 					}
-					seq, err := tiles.NextSequence()
+					mi := MapInfo{
+						ID:     int(seq),
+						Name:   strconv.Itoa(int(seq)),
+						Hidden: false,
+					}
+					raw, _ := json.Marshal(mi)
+					err = mapB.Put([]byte(strconv.Itoa(int(seq))), raw)
 					if err != nil {
 						return err
 					}
@@ -805,6 +828,16 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 				mapid := -1
 				offset := struct{ X, Y int }{}
 				for id, off := range maps {
+					mi := MapInfo{}
+					mraw := mapB.Get([]byte(strconv.Itoa(id)))
+					if mraw != nil {
+						json.Unmarshal(mraw, &mi)
+					}
+					if mi.Priority {
+						mapid = id
+						offset = off
+						break
+					}
 					if id < mapid || mapid == -1 {
 						mapid = id
 						offset = off
@@ -875,6 +908,7 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 					if mapid == mergeid {
 						continue
 					}
+					mapB.Delete([]byte(strconv.Itoa(mergeid)))
 					log.Println("Reporting merge", mergeid, mapid)
 					m.reportMerge(mergeid, mapid, Coord{X: offset.X - merge.X, Y: offset.Y - merge.Y})
 				}
@@ -928,4 +962,69 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 		m.SaveTile(op.mapid, Coord{X: op.x, Y: op.y}, 0, op.f, time.Now().UnixNano())
 	}
 	m.rebuildZooms(rw, req)
+}
+
+func (m *Map) adminMap(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+
+	mraw := req.FormValue("map")
+	mapid, err := strconv.Atoi(mraw)
+	if err != nil {
+		http.Error(rw, "map parse failed", http.StatusBadRequest)
+		return
+	}
+
+	if req.Method == "POST" {
+		req.ParseForm()
+
+		name := req.FormValue("name")
+		hidden := !(req.FormValue("hidden") == "")
+		priority := !(req.FormValue("priority") == "")
+
+		m.db.Update(func(tx *bbolt.Tx) error {
+			maps, err := tx.CreateBucketIfNotExists([]byte("maps"))
+			if err != nil {
+				return err
+			}
+			rawmap := maps.Get([]byte(strconv.Itoa(mapid)))
+			mapinfo := MapInfo{}
+			if rawmap != nil {
+				json.Unmarshal(rawmap, &mapinfo)
+			}
+			mapinfo.Name = name
+			mapinfo.Hidden = hidden
+			mapinfo.Priority = priority
+			rawmap, err = json.Marshal(mapinfo)
+			if err != nil {
+				return err
+			}
+			return maps.Put([]byte(strconv.Itoa(mapid)), rawmap)
+		})
+
+		http.Redirect(rw, req, "/admin", 302)
+		return
+	}
+	mi := MapInfo{}
+	m.db.View(func(tx *bbolt.Tx) error {
+		mapB := tx.Bucket([]byte("maps"))
+		if mapB == nil {
+			return nil
+		}
+		mraw := mapB.Get([]byte(strconv.Itoa(mapid)))
+		return json.Unmarshal(mraw, &mi)
+	})
+
+	m.ExecuteTemplate(rw, "admin/map.tmpl", struct {
+		Page    Page
+		Session *Session
+		MapInfo MapInfo
+	}{
+		Page:    m.getPage(req),
+		Session: s,
+		MapInfo: mi,
+	})
 }

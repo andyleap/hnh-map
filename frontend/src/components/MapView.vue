@@ -124,7 +124,7 @@
                         this.autoMode = true;
                     } else {
                         this.map.setView([0, 0], HnHMinZoom);
-                        let mapid = this.maps[0].id;
+                        let mapid = this.maps[0].ID;
                         this.$router.replace({path: `/grid/${mapid}/0/0/${HnHMinZoom}`});
                         this.trackingCharacterId = -1;
                     }
@@ -132,7 +132,7 @@
             },
             selectedMap(value) {
                 if (value) {
-                    this.changeMap(value.id);
+                    this.changeMap(value.ID);
                     let zoom = this.map.getZoom();
                     this.map.setView([0, 0], zoom);
                     
@@ -141,7 +141,7 @@
             },
             overlayMap(value) {
                 if (value) {
-                    this.overlayLayer.map = value.id;
+                    this.overlayLayer.map = value.ID;
                     this.overlayLayer.redraw();
                 } else {
                     this.overlayLayer.map = -1;
@@ -192,8 +192,8 @@
 
                 for (let id in maps) {
                     let map = maps[id];
-                    map.text = map.id;
-                    map.value = map.id;
+                    map.text = map.Name;
+                    map.value = map.ID;
                     this.maps.push(map);
                 }
                 this.maps.sort((a, b) => {
@@ -294,7 +294,7 @@
                     this.map.setView(latLng, this.$route.params.zoom);
                 } else { // Just show a map
                     if(this.maps.length > 0) {
-                        this.changeMap(this.maps[0].id);
+                        this.changeMap(this.maps[0].ID);
                     }
                     this.map.setView([0, 0], HnHMinZoom);
                 }

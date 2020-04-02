@@ -120,4 +120,40 @@ var migrations = []func(tx *bbolt.Tx) error{
 		}
 		return nil
 	},
+	func(tx *bbolt.Tx) error {
+		highest := uint64(0)
+		maps, err := tx.CreateBucketIfNotExists([]byte("maps"))
+		if err != nil {
+			return err
+		}
+		grids, err := tx.CreateBucketIfNotExists([]byte("grids"))
+		if err != nil {
+			return err
+		}
+		mapsFound := map[int]struct{}{}
+		err = grids.ForEach(func(k, v []byte) error {
+			gd := GridData{}
+			err := json.Unmarshal(v, &gd)
+			if err != nil {
+				return err
+			}
+			if _, ok := mapsFound[gd.Map]; !ok {
+				if uint64(gd.Map) > highest {
+					highest = uint64(gd.Map)
+				}
+				mi := MapInfo{
+					ID:     gd.Map,
+					Name:   strconv.Itoa(gd.Map),
+					Hidden: false,
+				}
+				raw, _ := json.Marshal(mi)
+				return maps.Put([]byte(strconv.Itoa(gd.Map)), raw)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		return maps.SetSequence(highest + 1)
+	},
 }

@@ -283,6 +283,11 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 			return err
 		}
 
+		mapB, err := tx.CreateBucketIfNotExists([]byte("maps"))
+		if err != nil {
+			return err
+		}
+
 		maps := map[int]struct{ X, Y int }{}
 		for x, row := range grup.Grids {
 			for y, grid := range row {
@@ -294,12 +299,19 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 				}
 			}
 		}
+
 		if len(maps) == 0 {
-			tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
+			seq, err := mapB.NextSequence()
 			if err != nil {
 				return err
 			}
-			seq, err := tiles.NextSequence()
+			mi := MapInfo{
+				ID:     int(seq),
+				Name:   strconv.Itoa(int(seq)),
+				Hidden: false,
+			}
+			raw, _ := json.Marshal(mi)
+			err = mapB.Put([]byte(strconv.Itoa(int(seq))), raw)
 			if err != nil {
 				return err
 			}
@@ -328,6 +340,16 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 		mapid := -1
 		offset := struct{ X, Y int }{}
 		for id, off := range maps {
+			mi := MapInfo{}
+			mraw := mapB.Get([]byte(strconv.Itoa(id)))
+			if mraw != nil {
+				json.Unmarshal(mraw, &mi)
+			}
+			if mi.Priority {
+				mapid = id
+				offset = off
+				break
+			}
 			if id < mapid || mapid == -1 {
 				mapid = id
 				offset = off
@@ -413,6 +435,7 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 			if mapid == mergeid {
 				continue
 			}
+			mapB.Delete([]byte(strconv.Itoa(mergeid)))
 			log.Println("Reporting merge", mergeid, mapid)
 			m.reportMerge(mergeid, mapid, Coord{X: offset.X - merge.X, Y: offset.Y - merge.Y})
 		}
