@@ -326,6 +326,9 @@ func (m *Map) wipeTile(rw http.ResponseWriter, req *http.Request) {
 			}
 			return nil
 		})
+		if err != nil {
+			return err
+		}
 		for _, id := range ids {
 			grids.Delete(id)
 		}
