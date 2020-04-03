@@ -314,7 +314,7 @@ func (m *Map) wipeTile(rw http.ResponseWriter, req *http.Request) {
 		if grids == nil {
 			return nil
 		}
-		id := []byte{}
+		ids := [][]byte{}
 		err := grids.ForEach(func(k, v []byte) error {
 			g := GridData{}
 			err := json.Unmarshal(v, &g)
@@ -322,15 +322,13 @@ func (m *Map) wipeTile(rw http.ResponseWriter, req *http.Request) {
 				return err
 			}
 			if g.Coord == c && g.Map == mapid {
-				id = k
-				return errFound
+				ids = append(ids, k)
 			}
 			return nil
 		})
-		if err != errFound {
-			return err
+		for _, id := range ids {
+			grids.Delete(id)
 		}
-		grids.Delete(id)
 
 		return nil
 	})
