@@ -25,34 +25,19 @@ export class Marker {
 
     remove(mapview) {
         if (this.marker) {
-            mapview.map.removeLayer(this.marker);
+            this.marker.remove();
             this.marker = null;
         }
     }
 
     add(mapview) {
-        if(!this.hidden && this.map == mapview.mapid) {
+        if(!this.hidden) {
             let icon = new ImageIcon({iconUrl: `${this.image}.png`});
             let position = mapview.map.unproject([this.position.x, this.position.y], HnHMaxZoom);
             this.marker = L.marker(position, {icon: icon, title: this.name});
-            this.marker.addTo(mapview.map);
+            this.marker.addTo(mapview.markerLayer);
             this.marker.on("click", this.callClickCallback.bind(this));
             this.marker.on("contextmenu", this.callContextCallback.bind(this));
-        }
-    }
-
-    update(mapview, updated) {
-        if(this.map != updated.map) {
-            this.remove(mapview);
-        }
-        this.map = updated.map;
-        this.position = updated.position;
-        if (!this.marker && this.map == mapview.mapid) {
-            this.add(mapview);
-        }
-        if(this.marker) {
-            let position = mapview.map.unproject([updated.position.x, updated.position.y], HnHMaxZoom);
-            this.marker.setLatLng(position);
         }
     }
 

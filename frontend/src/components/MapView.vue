@@ -10,6 +10,11 @@
                                v-model="showGridCoordinates">
                         <label class="form-check-label" for="check-grid-coords">Show grid coordinates</label>
                     </div>
+                    <div class="form-check">
+                        <input type="checkbox" class="form-check-input" id="check-hide-markers"
+                               v-model="hideMarkers">
+                        <label class="form-check-label" for="check-hide-markers">Hide Markers</label>
+                    </div>
                     <button type="button" class="btn btn-secondary" style="margin-top: 10px;" v-on:click="zoomOut">Zoom
                         out
                     </button>
@@ -81,6 +86,7 @@
         data: function () {
             return {
                 showGridCoordinates: false,
+                hideMarkers: false,
                 expandControlPanel: true,
 
                 trackingCharacterId: -1,
@@ -111,6 +117,14 @@
                 } else {
                     this.coordLayer.setOpacity(0);
                 }
+            },
+            hideMarkers(value) {
+                if(value) {
+                    this.markers.getElements().forEach(it => it.remove(this));
+                } else {
+                    this.markers.getElements().filter(it => it.map == this.mapid || it.map == this.overlayLayer.map).forEach(it => it.add(this));
+                }
+                this.markersHidden = value;
             },
             trackingCharacterId(value) {
                 if (value !== -1) {
@@ -143,9 +157,17 @@
                 if (value) {
                     this.overlayLayer.map = value.ID;
                     this.overlayLayer.redraw();
+                    if(!this.markersHidden) {
+                        this.markers.getElements().forEach(it => it.remove(this));
+                        this.markers.getElements().filter(it => it.map == this.mapid || it.map == this.overlayLayer.map).forEach(it => it.add(this));
+                    }
                 } else {
                     this.overlayLayer.map = -1;
                     this.overlayLayer.redraw();
+                    if(!this.markersHidden) {
+                        this.markers.getElements().forEach(it => it.remove(this));
+                        this.markers.getElements().filter(it => it.map == this.mapid).forEach(it => it.add(this));
+                    }
                 }
             },
             selectedMarker(value) {
@@ -228,6 +250,9 @@
 
                 this.coordLayer = new GridCoordLayer({tileSize: TileSize, opacity: 0});
                 this.coordLayer.addTo(this.map);
+
+                this.markerLayer = L.layerGroup();
+                this.markerLayer.addTo(this.map);
 
                 /*this.map.on('mousemove', (mev) => {
                     coords = this.map.project(mev.latlng, 6);
@@ -317,7 +342,9 @@
             updateMarkers(markersData) {
                 this.markers.update(markersData.map(it => new Marker(it)),
                     (marker) => { // Add
-                        marker.add(this);
+                        if(marker.map == this.mapid || marker.map == this.overlayLayer.map) {
+                            marker.add(this);
+                        }
                         marker.setClickCallback(() => {
                             this.map.setView(marker.marker.getLatLng(), HnHMaxZoom);
                         });
@@ -402,10 +429,10 @@
                     this.layer.redraw();
                     this.overlayLayer.map = -1;
                     this.overlayLayer.redraw();
-                    this.markers.getElements().forEach(it => {
-                        it.remove(this);
-                        it.add(this);
-                    });
+                    if(!this.markersHidden) {
+                        this.markers.getElements().forEach(it => it.remove(this));
+                        this.markers.getElements().filter(it => it.map == this.mapid).forEach(it => it.add(this));
+                    }
                     this.characters.getElements().forEach(it => {
                         it.remove(this);
                         it.add(this);
