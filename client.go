@@ -484,6 +484,11 @@ func (m *Map) mapdataIndex(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 */
+
+type ExtraData struct {
+	Season int
+}
+
 func (m *Map) gridUpload(rw http.ResponseWriter, req *http.Request) {
 	if strings.Count(req.Header.Get("Content-Type"), "=") >= 2 && strings.Count(req.Header.Get("Content-Type"), "\"") == 0 {
 		parts := strings.SplitN(req.Header.Get("Content-Type"), "=", 2)
@@ -495,13 +500,61 @@ func (m *Map) gridUpload(rw http.ResponseWriter, req *http.Request) {
 		log.Println(err)
 		return
 	}
+
+	id := req.FormValue("id")
+
+	extraData := req.FormValue("extraData")
+	if extraData != "" {
+		ed := ExtraData{}
+		json.Unmarshal([]byte(extraData), &ed)
+		if ed.Season == 3 {
+			needTile := false
+			m.db.Update(func(tx *bbolt.Tx) error {
+				b, err := tx.CreateBucketIfNotExists([]byte("grids"))
+				if err != nil {
+					return err
+				}
+				curRaw := b.Get([]byte(id))
+				if curRaw == nil {
+					return fmt.Errorf("Unknown grid id: %s", id)
+				}
+				cur := GridData{}
+				err = json.Unmarshal(curRaw, &cur)
+				if err != nil {
+					return err
+				}
+				if cur.NextUpdate.IsZero() {
+					needTile = true
+					return nil
+				}
+	
+				if time.Now().After(cur.NextUpdate) {
+					cur.NextUpdate = time.Now().Add(time.Minute * 30)
+				}
+		
+				raw, err := json.Marshal(cur)
+				if err != nil {
+					return err
+				}
+				b.Put([]byte(id), raw)
+		
+				return nil
+			})
+			if !needTile {
+				log.Println("ignoring tile upload: winter")
+				return
+			} else {
+				log.Println("Missing tile, using winter version")
+			}
+		}
+	}
+
 	file, _, err := req.FormFile("file")
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	id := req.FormValue("id")
-
+	
 	log.Println("map tile for ", id)
 
 	updateTile := false
