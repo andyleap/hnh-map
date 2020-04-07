@@ -51,7 +51,7 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 		return grid.ForEach(func(k, v []byte) error {
 			m := Marker{}
 			json.Unmarshal(v, &m)
-			graw := grids.Get([]byte(strconv.Itoa(m.GridID)))
+			graw := grids.Get([]byte(m.GridID))
 			if graw == nil {
 				return nil
 			}
@@ -62,6 +62,7 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 				Hidden: m.Hidden,
 				ID:     m.ID,
 				Name:   m.Name,
+				Map:    g.Map,
 				Position: Position{
 					X: m.Position.X + g.Coord.X*100,
 					Y: m.Position.Y + g.Coord.Y*100,
@@ -71,6 +72,35 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 		})
 	})
 	json.NewEncoder(rw).Encode(markers)
+}
+
+func (m *Map) getMaps(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_MAP) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	maps := map[int]*MapInfo{}
+	m.db.View(func(tx *bbolt.Tx) error {
+		mapB := tx.Bucket([]byte("maps"))
+		if maps == nil {
+			return nil
+		}
+		return mapB.ForEach(func(k, v []byte) error {
+			mapid, err := strconv.Atoi(string(k))
+			if err != nil {
+				return nil
+			}
+			mi := &MapInfo{}
+			json.Unmarshal(v, &mi)
+			if mi.Hidden {
+				return nil
+			}
+			maps[mapid] = mi
+			return nil
+		})
+	})
+	json.NewEncoder(rw).Encode(maps)
 }
 
 func (m *Map) config(rw http.ResponseWriter, req *http.Request) {

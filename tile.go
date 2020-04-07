@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"path/filepath"
 	"regexp"
@@ -13,19 +14,24 @@ import (
 )
 
 type TileData struct {
+	MapID int
 	Coord Coord
 	Zoom  int
 	File  string
 	Cache int64
 }
 
-func (m *Map) GetTile(c Coord, z int) (td *TileData) {
+func (m *Map) GetTile(mapid int, c Coord, z int) (td *TileData) {
 	m.db.View(func(tx *bbolt.Tx) error {
 		tiles := tx.Bucket([]byte("tiles"))
 		if tiles == nil {
 			return nil
 		}
-		zoom := tiles.Bucket([]byte(strconv.Itoa(z)))
+		mapb := tiles.Bucket([]byte(strconv.Itoa(mapid)))
+		if mapb == nil {
+			return nil
+		}
+		zoom := mapb.Bucket([]byte(strconv.Itoa(z)))
 		if zoom == nil {
 			return nil
 		}
@@ -39,17 +45,22 @@ func (m *Map) GetTile(c Coord, z int) (td *TileData) {
 	return
 }
 
-func (m *Map) SaveTile(c Coord, z int, f string, t int64) {
+func (m *Map) SaveTile(mapid int, c Coord, z int, f string, t int64) {
 	m.db.Update(func(tx *bbolt.Tx) error {
 		tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
 		if err != nil {
 			return err
 		}
-		zoom, err := tiles.CreateBucketIfNotExists([]byte(strconv.Itoa(z)))
+		mapb, err := tiles.CreateBucketIfNotExists([]byte(strconv.Itoa(mapid)))
+		if err != nil {
+			return err
+		}
+		zoom, err := mapb.CreateBucketIfNotExists([]byte(strconv.Itoa(z)))
 		if err != nil {
 			return err
 		}
 		td := &TileData{
+			MapID: mapid,
 			Coord: c,
 			Zoom:  z,
 			File:  f,
@@ -65,8 +76,16 @@ func (m *Map) SaveTile(c Coord, z int, f string, t int64) {
 	return
 }
 
+func (m *Map) reportMerge(from, to int, shift Coord) {
+	m.mergeUpdates.send(&Merge{
+		From:  from,
+		To:    to,
+		Shift: shift,
+	})
+}
+
 type TileCache struct {
-	X, Y, Z, T int
+	M, X, Y, Z, T int
 }
 
 func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
@@ -75,6 +94,7 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+
 	rw.Header().Set("Content-Type", "text/event-stream")
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
 	rw.Header().Set("X-Accel-Buffering", "no")
@@ -87,8 +107,10 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	c := make(chan *TileData, 5)
+	mc := make(chan *Merge, 5)
 
 	m.gridUpdates.watch(c)
+	m.mergeUpdates.watch(mc)
 
 	tileCache := make([]TileCache, 0, 100)
 
@@ -97,18 +119,28 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 		if tiles == nil {
 			return nil
 		}
-		return tiles.ForEach(func(k, v []byte) error {
-			zoom := tiles.Bucket(k)
-			return zoom.ForEach(func(tk, tv []byte) error {
-				td := TileData{}
-				json.Unmarshal(tv, &td)
-				tileCache = append(tileCache, TileCache{
-					X: td.Coord.X,
-					Y: td.Coord.Y,
-					Z: td.Zoom,
-					T: int(td.Cache),
-				})
+		return tiles.ForEach(func(mk, mv []byte) error {
+			mapb := tiles.Bucket(mk)
+			if mapb == nil {
 				return nil
+			}
+			return mapb.ForEach(func(k, v []byte) error {
+				zoom := mapb.Bucket(k)
+				if zoom == nil {
+					return nil
+				}
+				return zoom.ForEach(func(tk, tv []byte) error {
+					td := TileData{}
+					json.Unmarshal(tv, &td)
+					tileCache = append(tileCache, TileCache{
+						M: td.MapID,
+						X: td.Coord.X,
+						Y: td.Coord.Y,
+						Z: td.Zoom,
+						T: int(td.Cache),
+					})
+					return nil
+				})
 			})
 		})
 	})
@@ -129,19 +161,35 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 			}
 			found := false
 			for i := range tileCache {
-				if tileCache[i].X == e.Coord.X && tileCache[i].Y == e.Coord.Y && tileCache[i].Z == e.Zoom {
+				if tileCache[i].M == e.MapID && tileCache[i].X == e.Coord.X && tileCache[i].Y == e.Coord.Y && tileCache[i].Z == e.Zoom {
 					tileCache[i].T = int(e.Cache)
 					found = true
 				}
 			}
 			if !found {
 				tileCache = append(tileCache, TileCache{
+					M: e.MapID,
 					X: e.Coord.X,
 					Y: e.Coord.Y,
 					Z: e.Zoom,
 					T: int(e.Cache),
 				})
 			}
+		case e, ok := <-mc:
+			log.Println(e, ok)
+			if !ok {
+				return
+			}
+			raw, err := json.Marshal(e)
+			if err != nil {
+				log.Println(err)
+			}
+			log.Println(string(raw))
+			fmt.Fprint(rw, "event: merge\n")
+			fmt.Fprint(rw, "data: ")
+			rw.Write(raw)
+			fmt.Fprint(rw, "\n\n")
+			flusher.Flush()
 		case <-ticker.C:
 			raw, _ := json.Marshal(tileCache)
 			fmt.Fprint(rw, "data: ")
@@ -153,7 +201,7 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 	}
 }
 
-var tileRegex = regexp.MustCompile("([0-9]+)/([-0-9]+)_([-0-9]+).png")
+var tileRegex = regexp.MustCompile("([0-9]+)/([0-9]+)/([-0-9]+)_([-0-9]+).png")
 
 func (m *Map) gridTile(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
@@ -162,22 +210,32 @@ func (m *Map) gridTile(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	tile := tileRegex.FindStringSubmatch(req.URL.Path)
-	z, err := strconv.Atoi(tile[1])
+	mapid, err := strconv.Atoi(tile[1])
 	if err != nil {
 		http.Error(rw, "request parsing error", http.StatusInternalServerError)
 		return
 	}
-	x, err := strconv.Atoi(tile[2])
+	z, err := strconv.Atoi(tile[2])
 	if err != nil {
 		http.Error(rw, "request parsing error", http.StatusInternalServerError)
 		return
 	}
-	y, err := strconv.Atoi(tile[3])
+	x, err := strconv.Atoi(tile[3])
 	if err != nil {
 		http.Error(rw, "request parsing error", http.StatusInternalServerError)
 		return
 	}
-	td := m.GetTile(Coord{X: x, Y: y}, z)
+	y, err := strconv.Atoi(tile[4])
+	if err != nil {
+		http.Error(rw, "request parsing error", http.StatusInternalServerError)
+		return
+	}
+	td := m.GetTile(mapid, Coord{X: x, Y: y}, z)
+
+	if td == nil {
+		http.Error(rw, "file not found", 404)
+		return
+	}
 
 	rw.Header().Set("Cache-Control", "private immutable")
 

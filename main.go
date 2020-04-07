@@ -24,15 +24,14 @@ type Map struct {
 	characters map[string]Character
 	chmu       sync.RWMutex
 
-	sessions map[string]*Session
-	sessmu   sync.RWMutex
-
 	*webapp.WebApp
 
-	gridUpdates topic
+	gridUpdates  topic
+	mergeUpdates mergeTopic
 }
 
 type Session struct {
+	ID       string
 	Username string
 	Auths    Auths
 }
@@ -63,8 +62,6 @@ func main() {
 		db:          db,
 
 		characters: map[string]Character{},
-
-		sessions: map[string]*Session{},
 
 		WebApp: webapp.Must(webapp.New().LoadTemplates("./templates/")),
 	}
@@ -108,17 +105,20 @@ func main() {
 	http.HandleFunc("/admin/setPrefix", m.setPrefix)
 	http.HandleFunc("/admin/setTitle", m.setTitle)
 	http.HandleFunc("/admin/rebuildZooms", m.rebuildZooms)
-	http.HandleFunc("/admin/backup", m.backup)
+	http.HandleFunc("/admin/export", m.export)
 	http.HandleFunc("/admin/merge", m.merge)
+	http.HandleFunc("/admin/map", m.adminMap)
 
 	// Map frontend endpoints
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
 	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
 	http.HandleFunc("/map/api/config", m.config)
 	http.HandleFunc("/map/api/admin/wipeTile", m.wipeTile)
+	http.HandleFunc("/map/api/admin/setCoords", m.setCoords)
 	http.HandleFunc("/map/api/admin/hideMarker", m.hideMarker)
 	http.HandleFunc("/map/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)
+	http.HandleFunc("/map/api/maps", m.getMaps)
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
 
 	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
@@ -130,6 +130,7 @@ func main() {
 type Character struct {
 	Name     string   `json:"name"`
 	ID       int      `json:"id"`
+	Map      int      `json:"map"`
 	Position Position `json:"position"`
 	Type     string   `json:"type"`
 	updated  time.Time
@@ -138,7 +139,7 @@ type Character struct {
 type Marker struct {
 	Name     string   `json:"name"`
 	ID       int      `json:"id"`
-	GridID   int      `json:"string"`
+	GridID   string   `json:"gridID"`
 	Position Position `json:"position"`
 	Image    string   `json:"image"`
 	Hidden   bool     `json:"hidden"`
@@ -147,15 +148,24 @@ type Marker struct {
 type FrontendMarker struct {
 	Name     string   `json:"name"`
 	ID       int      `json:"id"`
+	Map      int      `json:"map"`
 	Position Position `json:"position"`
 	Image    string   `json:"image"`
 	Hidden   bool     `json:"hidden"`
+}
+
+type MapInfo struct {
+	ID       int
+	Name     string
+	Hidden   bool
+	Priority bool
 }
 
 type GridData struct {
 	ID         string
 	Coord      Coord
 	NextUpdate time.Time
+	Map        int
 }
 
 type Coord struct {
@@ -169,7 +179,7 @@ type Position struct {
 }
 
 func (c Coord) Name() string {
-	return fmt.Sprintf("%d_%d.png", c.X, c.Y)
+	return fmt.Sprintf("%d_%d", c.X, c.Y)
 }
 
 func (c Coord) Parent() Coord {
@@ -209,13 +219,47 @@ type User struct {
 }
 
 func (m *Map) getSession(req *http.Request) *Session {
-	m.sessmu.RLock()
-	defer m.sessmu.RUnlock()
 	c, err := req.Cookie("session")
 	if err != nil {
 		return nil
 	}
-	return m.sessions[c.Value]
+	var s *Session
+	m.db.View(func(tx *bbolt.Tx) error {
+		sessions := tx.Bucket([]byte("sessions"))
+		if sessions == nil {
+			return nil
+		}
+		session := sessions.Get([]byte(c.Value))
+		if session == nil {
+			return nil
+		}
+		return json.Unmarshal(session, &s)
+	})
+	return s
+}
+
+func (m *Map) deleteSession(s *Session) {
+	m.db.Update(func(tx *bbolt.Tx) error {
+		sessions, err := tx.CreateBucketIfNotExists([]byte("sessions"))
+		if err != nil {
+			return err
+		}
+		return sessions.Delete([]byte(s.ID))
+	})
+}
+
+func (m *Map) saveSession(s *Session) {
+	m.db.Update(func(tx *bbolt.Tx) error {
+		sessions, err := tx.CreateBucketIfNotExists([]byte("sessions"))
+		if err != nil {
+			return err
+		}
+		buf, err := json.Marshal(s)
+		if err != nil {
+			return err
+		}
+		return sessions.Put([]byte(s.ID), buf)
+	})
 }
 
 type Page struct {

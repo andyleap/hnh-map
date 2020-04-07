@@ -18,20 +18,26 @@ export class Marker {
         this.text = this.name;
         this.value = this.id;
         this.hidden = markerData.hidden;
+        this.map = markerData.map;
+        this.onClick = null;
+        this.onContext = null;
     }
 
-    remove(map) {
+    remove(mapview) {
         if (this.marker) {
-            map.removeLayer(this.marker);
+            this.marker.remove();
+            this.marker = null;
         }
     }
 
-    add(map) {
+    add(mapview) {
         if(!this.hidden) {
             let icon = new ImageIcon({iconUrl: `${this.image}.png`});
-            let position = map.unproject([this.position.x, this.position.y], HnHMaxZoom);
+            let position = mapview.map.unproject([this.position.x, this.position.y], HnHMaxZoom);
             this.marker = L.marker(position, {icon: icon, title: this.name});
-            this.marker.addTo(map)
+            this.marker.addTo(mapview.markerLayer);
+            this.marker.on("click", this.callClickCallback.bind(this));
+            this.marker.on("contextmenu", this.callContextCallback.bind(this));
         }
     }
 
@@ -43,14 +49,21 @@ export class Marker {
     }
 
     setClickCallback(callback) {
-        if (this.marker) {
-            this.marker.on("click", callback);
-        }
+        this.onClick = callback;
     }
 
+    callClickCallback(e) {
+        if(this.onClick != null) {
+            this.onClick(e);
+        }
+    }
     setContextMenu(callback) {
-        if(this.marker) {
-            this.marker.on("contextmenu", callback);
+        this.onContext = callback;
+    }
+
+    callContextCallback(e) {
+        if(this.onContext != null) {
+            this.onContext(e);
         }
     }
 }
