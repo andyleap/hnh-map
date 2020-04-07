@@ -523,21 +523,45 @@ func (m *Map) gridUpload(rw http.ResponseWriter, req *http.Request) {
 				if err != nil {
 					return err
 				}
-				if cur.NextUpdate.IsZero() {
+
+				tiles, err := tx.CreateBucketIfNotExists([]byte("tiles"))
+				if err != nil {
+					return err
+				}
+				maps, err := tiles.CreateBucketIfNotExists([]byte(strconv.Itoa(cur.Map)))
+				if err != nil {
+					return err
+				}
+				zooms, err := maps.CreateBucketIfNotExists([]byte("0"))
+				if err != nil {
+					return err
+				}
+
+				tdRaw := zooms.Get([]byte(cur.Coord.Name()))
+				if tdRaw == nil {
 					needTile = true
 					return nil
 				}
-	
+				td := TileData{}
+				err = json.Unmarshal(tdRaw, &td)
+				if err != nil {
+					return err
+				}
+				if td.File == "" {
+					needTile = true
+					return nil
+				}
+
 				if time.Now().After(cur.NextUpdate) {
 					cur.NextUpdate = time.Now().Add(time.Minute * 30)
 				}
-		
+
 				raw, err := json.Marshal(cur)
 				if err != nil {
 					return err
 				}
 				b.Put([]byte(id), raw)
-		
+
 				return nil
 			})
 			if !needTile {
@@ -554,7 +578,7 @@ func (m *Map) gridUpload(rw http.ResponseWriter, req *http.Request) {
 		log.Println(err)
 		return
 	}
-	
+
 	log.Println("map tile for ", id)
 
 	updateTile := false
