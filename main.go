@@ -103,6 +103,7 @@ func main() {
 	http.HandleFunc("/admin/deleteUser", m.deleteUser)
 	http.HandleFunc("/admin/wipe", m.wipe)
 	http.HandleFunc("/admin/setPrefix", m.setPrefix)
+	http.HandleFunc("/admin/setDefaultHide", m.setDefaultHide)
 	http.HandleFunc("/admin/setTitle", m.setTitle)
 	http.HandleFunc("/admin/rebuildZooms", m.rebuildZooms)
 	http.HandleFunc("/admin/export", m.export)
