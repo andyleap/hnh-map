@@ -142,7 +142,22 @@ func (m *Map) updatePositions(rw http.ResponseWriter, req *http.Request) {
 				Type:    craw.Type,
 				updated: time.Now(),
 			}
-			m.characters[id] = c
+			old, ok := m.characters[id]
+			if !ok {
+				m.characters[id] = c
+			} else {
+				if old.Type == "player" {
+					if c.Type == "player" {
+						m.characters[id] = c
+					}
+				} else if old.Type != "unknown" {
+					if c.Type != "unknown" {
+						m.characters[id] = c
+					}
+				} else {
+					m.characters[id] = c
+				}
+			}
 		}
 		return nil
 	})
