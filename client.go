@@ -288,6 +288,11 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 			return err
 		}
 
+		configb, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			return err
+		}
+
 		maps := map[int]struct{ X, Y int }{}
 		for x, row := range grup.Grids {
 			for y, grid := range row {
@@ -308,7 +313,7 @@ func (m *Map) gridUpdate(rw http.ResponseWriter, req *http.Request) {
 			mi := MapInfo{
 				ID:     int(seq),
 				Name:   strconv.Itoa(int(seq)),
-				Hidden: false,
+				Hidden: configb.Get([]byte("defaultHide")) != nil,
 			}
 			raw, _ := json.Marshal(mi)
 			err = mapB.Put([]byte(strconv.Itoa(int(seq))), raw)

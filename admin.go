@@ -28,6 +28,7 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 	users := []string{}
 	prefix := ""
 	maps := []MapInfo{}
+	defaultHide := false
 	m.db.View(func(tx *bbolt.Tx) error {
 		b := tx.Bucket([]byte("users"))
 		if b == nil {
@@ -36,6 +37,7 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 		config := tx.Bucket([]byte("config"))
 		if config != nil {
 			prefix = string(config.Get([]byte("prefix")))
+			defaultHide = config.Get([]byte("defaultHide")) != nil
 		}
 		mapB := tx.Bucket([]byte("maps"))
 		if mapB != nil {
@@ -53,17 +55,19 @@ func (m *Map) admin(rw http.ResponseWriter, req *http.Request) {
 	})
 
 	m.ExecuteTemplate(rw, "admin/index.tmpl", struct {
-		Page    Page
-		Session *Session
-		Users   []string
-		Prefix  string
-		Maps    []MapInfo
+		Page        Page
+		Session     *Session
+		Users       []string
+		Prefix      string
+		DefaultHide bool
+		Maps        []MapInfo
 	}{
-		Page:    m.getPage(req),
-		Session: s,
-		Users:   users,
-		Prefix:  prefix,
-		Maps:    maps,
+		Page:        m.getPage(req),
+		Session:     s,
+		Users:       users,
+		Prefix:      prefix,
+		DefaultHide: defaultHide,
+		Maps:        maps,
 	})
 }
 
@@ -188,6 +192,26 @@ func (m *Map) setPrefix(rw http.ResponseWriter, req *http.Request) {
 			return err
 		}
 		return b.Put([]byte("prefix"), []byte(req.FormValue("prefix")))
+	})
+	http.Redirect(rw, req, "/admin/", 302)
+}
+
+func (m *Map) setDefaultHide(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+	m.db.Update(func(tx *bbolt.Tx) error {
+		b, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			return err
+		}
+		if req.FormValue("defaultHide") != "" {
+			return b.Put([]byte("defaultHide"), []byte(req.FormValue("defaultHide")))
+		} else {
+			return b.Delete([]byte("defaultHide"))
+		}
 	})
 	http.Redirect(rw, req, "/admin/", 302)
 }
@@ -732,6 +756,10 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			return err
 		}
+		configb, err := tx.CreateBucketIfNotExists([]byte("config"))
+		if err != nil {
+			return err
+		}
 		for _, fhdr := range zr.File {
 			if strings.HasSuffix(fhdr.Name, ".json") {
 				f, err := fhdr.Open()
@@ -803,7 +831,7 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 					mi := MapInfo{
 						ID:     int(seq),
 						Name:   strconv.Itoa(int(seq)),
-						Hidden: false,
+						Hidden: configb.Get([]byte("defaultHide")) != nil,
 					}
 					raw, _ := json.Marshal(mi)
 					err = mapB.Put([]byte(strconv.Itoa(int(seq))), raw)

@@ -48,6 +48,22 @@
             </table>
             <div class="card">
                 <div class="card-content">
+                    <h5>Default maps to hidden</h5>
+                    <p>This makes new map layers hidden by default</p>
+                    <form action="/admin/setDefaultHide" method="POST">
+                    <div class="row">
+                        <label>
+                            <input type="checkbox" name="defaultHide" value="true"{{if .DefaultHide}} checked="checked"{{end}}/>
+                            <span>Default Hidden</span>
+                        </label>
+                        <div class="input-field col s6">
+                            <button class="btn waves-effect waves-light" type="submit" name="action">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-content">
                     <h5>Set prefix for tokens</h5>
                     <p>This is used for making the client tokens a "copy/paste" straight into client</p>
                     <form action="/admin/setPrefix" method="POST">
