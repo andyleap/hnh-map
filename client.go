@@ -149,10 +149,16 @@ func (m *Map) updatePositions(rw http.ResponseWriter, req *http.Request) {
 				if old.Type == "player" {
 					if c.Type == "player" {
 						m.characters[id] = c
+					} else {
+						old.Position = c.Position
+						m.characters[id] = old
 					}
 				} else if old.Type != "unknown" {
 					if c.Type != "unknown" {
 						m.characters[id] = c
+					} else {
+						old.Position = c.Position
+						m.characters[id] = old
 					}
 				} else {
 					m.characters[id] = c
