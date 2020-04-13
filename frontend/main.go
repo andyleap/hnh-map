@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/gopherjs/vecty"
 	"github.com/gopherjs/vecty/elem"
+	"github.com/gopherjs/vecty/style"
 	router "marwan.io/vecty-router"
 )
 
@@ -39,15 +40,25 @@ func (mv *MainView) Render() vecty.ComponentOrHTML {
 
 type Map struct {
 	vecty.Core
+	mapDiv *vecty.HTML
 }
 
 func (m *Map) Render() vecty.ComponentOrHTML {
+	if m.mapDiv == nil {
+		m.mapDiv = elem.Div(
+			vecty.Markup(
+				style.Height(style.Size("100vh")),
+				//style.Width(style.Size("100vw")),
+			),
+		)
+	}
 	return elem.Div(
+		m.mapDiv,
 		vecty.Text("Map"),
 	)
 
 }
 
 func (m *Map) Mount() {
-	L.
+	L.Call("map", m.mapDiv.Node(), map[string]interface{}{})
 }
