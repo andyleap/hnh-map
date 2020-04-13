@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/andyleap/hnh-map/wasmserve"
 	"github.com/andyleap/hnh-map/webapp"
 
 	"go.etcd.io/bbolt"
@@ -89,16 +90,20 @@ func main() {
 
 	go m.cleanChars()
 
+	ws, err := wasmserve.New("frontend", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Mapping client endpoints
 	http.HandleFunc("/client/", m.client)
 
 	http.HandleFunc("/login", m.login)
-	http.HandleFunc("/", m.index)
+	http.HandleFunc("/", m.CheckLogin(ws))
 	http.HandleFunc("/generateToken", m.generateToken)
 	http.HandleFunc("/password", m.changePassword)
 
 	// Admin endpoints
-	http.HandleFunc("/admin/", m.admin)
 	http.HandleFunc("/admin/user", m.adminUser)
 	http.HandleFunc("/admin/deleteUser", m.deleteUser)
 	http.HandleFunc("/admin/wipe", m.wipe)
@@ -111,15 +116,12 @@ func main() {
 	http.HandleFunc("/admin/map", m.adminMap)
 
 	// Map frontend endpoints
-	http.HandleFunc("/map/api/v1/characters", m.getChars)
-	http.HandleFunc("/map/api/v1/markers", m.getMarkers)
 	http.HandleFunc("/map/api/config", m.config)
 	http.HandleFunc("/map/api/admin/wipeTile", m.wipeTile)
 	http.HandleFunc("/map/api/admin/setCoords", m.setCoords)
 	http.HandleFunc("/map/api/admin/hideMarker", m.hideMarker)
 	http.HandleFunc("/map/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)
-	http.HandleFunc("/map/api/maps", m.getMaps)
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
 
 	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
@@ -313,5 +315,16 @@ func (m *Map) cleanChars() {
 			}
 		}
 		m.chmu.Unlock()
+	}
+}
+
+func (m *Map) CheckLogin(h http.Handler) http.HandlerFunc {
+	return func(rw http.ResponseWriter, req *http.Request) {
+		s := m.getSession(req)
+		if s == nil {
+			http.Redirect(rw, req, "/login", 302)
+			return
+		}
+		h.ServeHTTP(rw, req)
 	}
 }
