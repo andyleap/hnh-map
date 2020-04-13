@@ -15,9 +15,9 @@ import (
 )
 
 const indexHTML = `<!DOCTYPE html>
-<script src="wasm_exec.js"></script><script>
+<script src="/wasm_exec.js"></script><script>
 (async () => {
-  const resp = await fetch('main.wasm');
+  const resp = await fetch('/main.wasm');
   if (!resp.ok) {
     const pre = document.createElement('pre');
     pre.innerText = await resp.text();
@@ -33,15 +33,15 @@ const indexHTML = `<!DOCTYPE html>
 `
 
 type wasmServe struct {
-	base string
+	base    string
 	options Options
 
-	tmpWorkDir string
+	tmpWorkDir   string
 	tmpOutputDir string
 }
 
 type Options struct {
-	Tags string
+	Tags        string
 	AllowOrigin string
 }
 
@@ -51,7 +51,7 @@ func New(base string, options *Options) (http.Handler, error) {
 	}
 	var err error
 	w := &wasmServe{
-		base: base,
+		base:    base,
 		options: *options,
 	}
 	w.tmpWorkDir, err = ioutil.TempDir("", "")

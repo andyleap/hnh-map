@@ -23,15 +23,27 @@ func initializeLeaflet() {
 	doc.Get("head").Call("appendChild", script)
 
 	var wg sync.WaitGroup
-	wg.Add(1)
+	wg.Add(2)
 	var callback js.Func
 	callback = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		L = js.Global().Get("L")
 		callback.Release()
 		wg.Done()
+		script2 := doc.Call("createElement", "script")
+		script2.Set("src", "/js/SmartTileLayer.js")
+		doc.Get("head").Call("appendChild", script2)
+		var callback2 js.Func
+		callback2 = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			callback2.Release()
+			wg.Done()
+			return nil
+		})
+		script2.Set("onreadystatechange", callback2)
+		script2.Set("onload", callback2)
 		return nil
 	})
 	script.Set("onreadystatechange", callback)
 	script.Set("onload", callback)
+
 	wg.Wait()
 }

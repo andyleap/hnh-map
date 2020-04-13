@@ -120,11 +120,11 @@ func main() {
 	http.HandleFunc("/map/api/admin/wipeTile", m.wipeTile)
 	http.HandleFunc("/map/api/admin/setCoords", m.setCoords)
 	http.HandleFunc("/map/api/admin/hideMarker", m.hideMarker)
-	http.HandleFunc("/map/updates", m.watchGridUpdates)
+	http.HandleFunc("/map/api/updates", m.watchGridUpdates)
 	http.HandleFunc("/map/grids/", m.gridTile)
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
 
-	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
+	http.Handle("/js/", http.StripPrefix("/js", http.FileServer(http.Dir("frontend/js"))))
 
 	log.Printf("Listening on port %d", *port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))
