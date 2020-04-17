@@ -109,6 +109,7 @@ func main() {
 	http.HandleFunc("/admin/export", m.export)
 	http.HandleFunc("/admin/merge", m.merge)
 	http.HandleFunc("/admin/map", m.adminMap)
+	http.HandleFunc("/admin/mapic", m.adminICMap)
 
 	// Map frontend endpoints
 	http.HandleFunc("/map/api/v1/characters", m.getChars)
@@ -123,6 +124,8 @@ func main() {
 	//http.Handle("/map/grids/", http.StripPrefix("/map/grids", http.FileServer(http.Dir(m.gridStorage))))
 
 	http.Handle("/map/", http.StripPrefix("/map", http.FileServer(http.Dir("frontend"))))
+
+	http.Handle("/js/", http.FileServer(http.Dir("public")))
 
 	log.Printf("Listening on port %d", *port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", *port), nil))

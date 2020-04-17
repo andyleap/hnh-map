@@ -992,6 +992,45 @@ func (m *Map) merge(rw http.ResponseWriter, req *http.Request) {
 	m.rebuildZooms(rw, req)
 }
 
+func (m *Map) adminICMap(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s == nil || !s.Auths.Has(AUTH_ADMIN) {
+		http.Redirect(rw, req, "/", 302)
+		return
+	}
+
+	mraw := req.FormValue("map")
+	mapid, err := strconv.Atoi(mraw)
+	if err != nil {
+		http.Error(rw, "map parse failed", http.StatusBadRequest)
+		return
+	}
+
+	action := req.FormValue("action")
+
+	m.db.Update(func(tx *bbolt.Tx) error {
+		maps, err := tx.CreateBucketIfNotExists([]byte("maps"))
+		if err != nil {
+			return err
+		}
+		rawmap := maps.Get([]byte(strconv.Itoa(mapid)))
+		mapinfo := MapInfo{}
+		if rawmap != nil {
+			json.Unmarshal(rawmap, &mapinfo)
+		}
+		switch action {
+		case "toggle-hidden":
+			mapinfo.Hidden = !mapinfo.Hidden
+			m.ExecuteTemplate(rw, "admin/index.tmpl:toggle-hidden", mapinfo)
+		}
+		rawmap, err = json.Marshal(mapinfo)
+		if err != nil {
+			return err
+		}
+		return maps.Put([]byte(strconv.Itoa(mapid)), rawmap)
+	})
+}
+
 func (m *Map) adminMap(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
 	if s == nil || !s.Auths.Has(AUTH_ADMIN) {

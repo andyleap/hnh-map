@@ -5,6 +5,8 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
 		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <script src="/js/zepto.min.js"></script>
+        <script src="/js/intercooler-1.2.1.min.js"></script>
 		<style>
 		</style>
         <title>{{.Page.Title}} - Admin</title>
@@ -34,13 +36,14 @@
                 <thead>
                     <tr>
                         <th>Map</th>
-                        <th>Actions</th>
+                        <th colspan="2">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     {{range .Maps}}
                     <tr>
                         <td>{{.Name}}</td>
+                        <td><a ic-post-to="/admin/mapic?map={{.ID}}&action=toggle-hidden" class="waves-effect waves-light btn">{{block "admin/index.tmpl:toggle-hidden" .}}{{if .Hidden}}Show{{else}}Hide{{end}}{{end}}</a></td>
                         <td><a href="/admin/map?map={{.ID}}" class="waves-effect waves-light btn">Edit</a></td>
                     </tr>
                     {{end}}
