@@ -169,6 +169,12 @@ func (m *Map) wipe(rw http.ResponseWriter, req *http.Request) {
 				return err
 			}
 		}
+		if tx.Bucket([]byte("maps")) != nil {
+			err := tx.DeleteBucket([]byte("maps"))
+			if err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
