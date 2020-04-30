@@ -10,7 +10,7 @@
   "dependencies": {
     "bootstrap": "4.2.1",
     "bootstrap-select": "1.13.5",
-    "jquery": "3.3.1",
+    "jquery": "3.5.0",
     "leaflet": "1.4.0",
     "vue": "2.5.21",
     "vue-resource": "1.5.1",
