@@ -55,8 +55,8 @@ func (m *Map) index(rw http.ResponseWriter, req *http.Request) {
 
 func (m *Map) login(rw http.ResponseWriter, req *http.Request) {
 	if req.Method == "POST" {
-		auths := m.getAuth(req.FormValue("user"), req.FormValue("pass"))
-		if len(auths) > 0 {
+		u := m.getUser(req.FormValue("user"), req.FormValue("pass"))
+		if u != nil {
 			session := make([]byte, 32)
 			rand.Read(session)
 			http.SetCookie(rw, &http.Cookie{
@@ -67,7 +67,6 @@ func (m *Map) login(rw http.ResponseWriter, req *http.Request) {
 			s := &Session{
 				ID:       hex.EncodeToString(session),
 				Username: req.FormValue("user"),
-				Auths:    auths,
 			}
 			m.saveSession(s)
 			http.Redirect(rw, req, "/", 302)

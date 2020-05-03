@@ -33,7 +33,7 @@ type Map struct {
 type Session struct {
 	ID       string
 	Username string
-	Auths    Auths
+	Auths    Auths `json:"-"`
 }
 
 var (
@@ -233,11 +233,31 @@ func (m *Map) getSession(req *http.Request) *Session {
 		if sessions == nil {
 			return nil
 		}
+		users := tx.Bucket([]byte("users"))
+		if users == nil {
+			return nil
+		}
 		session := sessions.Get([]byte(c.Value))
 		if session == nil {
 			return nil
 		}
-		return json.Unmarshal(session, &s)
+		err := json.Unmarshal(session, &s)
+		if err != nil {
+			return err
+		}
+		raw := users.Get([]byte(s.Username))
+		if raw == nil {
+			s = nil
+			return nil
+		}
+		u := User{}
+		err = json.Unmarshal(raw, &u)
+		if err != nil {
+			s = nil
+			return err
+		}
+		s.Auths = u.Auths
+		return nil
 	})
 	return s
 }
@@ -283,28 +303,28 @@ func (m *Map) getPage(req *http.Request) Page {
 	return p
 }
 
-func (m *Map) getAuth(user, pass string) Auths {
-	auth := Auths{}
+func (m *Map) getUser(user, pass string) (u *User) {
 	m.db.View(func(tx *bbolt.Tx) error {
 		users := tx.Bucket([]byte("users"))
 		if users == nil {
 			if user == "admin" && pass == "admin" {
-				auth = Auths{"admin"}
+				u = &User{
+					Auths: Auths{"admin"},
+				}
 			}
 			return nil
 		}
 		raw := users.Get([]byte(user))
 		if raw != nil {
-			u := User{}
 			json.Unmarshal(raw, &u)
 			if bcrypt.CompareHashAndPassword(u.Pass, []byte(pass)) != nil {
+				u = nil
 				return nil
 			}
-			auth = u.Auths
 		}
 		return nil
 	})
-	return auth
+	return u
 }
 
 func (m *Map) cleanChars() {
