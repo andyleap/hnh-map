@@ -93,6 +93,7 @@ func main() {
 	http.HandleFunc("/client/", m.client)
 
 	http.HandleFunc("/login", m.login)
+	http.HandleFunc("/logout", m.logout)
 	http.HandleFunc("/", m.index)
 	http.HandleFunc("/generateToken", m.generateToken)
 	http.HandleFunc("/password", m.changePassword)

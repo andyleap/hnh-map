@@ -80,6 +80,15 @@ func (m *Map) login(rw http.ResponseWriter, req *http.Request) {
 	})
 }
 
+func (m *Map) logout(rw http.ResponseWriter, req *http.Request) {
+	s := m.getSession(req)
+	if s != nil {
+		m.deleteSession(s)
+	}
+	http.Redirect(rw, req, "/login", 302)
+	return
+}
+
 func (m *Map) generateToken(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
 	if s == nil || !s.Auths.Has(AUTH_UPLOAD) {
