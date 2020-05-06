@@ -100,9 +100,7 @@ func (m *Map) adminUser(rw http.ResponseWriter, req *http.Request) {
 			if password != "" {
 				u.Pass, _ = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 			}
-			if len(auths) > 0 {
-				u.Auths = auths
-			}
+			u.Auths = auths
 			raw, _ = json.Marshal(u)
 			users.Put([]byte(username), raw)
 			return nil
