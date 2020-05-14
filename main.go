@@ -31,9 +31,10 @@ type Map struct {
 }
 
 type Session struct {
-	ID       string
-	Username string
-	Auths    Auths `json:"-"`
+	ID        string
+	Username  string
+	Auths     Auths `json:"-"`
+	TempAdmin bool
 }
 
 var (
@@ -212,9 +213,10 @@ func (a Auths) Has(auth string) bool {
 }
 
 const (
-	AUTH_ADMIN  = "admin"
-	AUTH_MAP    = "map"
-	AUTH_UPLOAD = "upload"
+	AUTH_ADMIN   = "admin"
+	AUTH_MAP     = "map"
+	AUTH_MARKERS = "markers"
+	AUTH_UPLOAD  = "upload"
 )
 
 type User struct {
@@ -234,10 +236,6 @@ func (m *Map) getSession(req *http.Request) *Session {
 		if sessions == nil {
 			return nil
 		}
-		users := tx.Bucket([]byte("users"))
-		if users == nil {
-			return nil
-		}
 		session := sessions.Get([]byte(c.Value))
 		if session == nil {
 			return nil
@@ -245,6 +243,14 @@ func (m *Map) getSession(req *http.Request) *Session {
 		err := json.Unmarshal(session, &s)
 		if err != nil {
 			return err
+		}
+		if s.TempAdmin {
+			s.Auths = Auths{AUTH_ADMIN}
+			return nil
+		}
+		users := tx.Bucket([]byte("users"))
+		if users == nil {
+			return nil
 		}
 		raw := users.Get([]byte(s.Username))
 		if raw == nil {
@@ -310,7 +316,7 @@ func (m *Map) getUser(user, pass string) (u *User) {
 		if users == nil {
 			if user == "admin" && pass == "admin" {
 				u = &User{
-					Auths: Auths{"admin"},
+					Auths: Auths{"admin", "tempadmin"},
 				}
 			}
 			return nil

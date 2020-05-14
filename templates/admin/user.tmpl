@@ -35,6 +35,12 @@
                         </li>
                         <li class="collection-item">
                             <label>
+                                <input type="checkbox" name="auths" value="markers"{{if .User.Auths.Has "markers"}} checked="checked"{{end}}/>
+                                <span>Markers</span>
+                            </label>
+                        </li>
+                        <li class="collection-item">
+                            <label>
                                 <input type="checkbox" name="auths" value="upload"{{if .User.Auths.Has "upload"}} checked="checked"{{end}}/>
                                 <span>Upload</span>
                             </label>

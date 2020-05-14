@@ -19,6 +19,10 @@ func (m *Map) getChars(rw http.ResponseWriter, req *http.Request) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		return
 	}
+	if !s.Auths.Has(AUTH_MARKERS) {
+		json.NewEncoder(rw).Encode([]interface{}{})
+		return
+	}
 	chars := []Character{}
 	m.chmu.RLock()
 	defer m.chmu.RUnlock()
@@ -32,6 +36,10 @@ func (m *Map) getMarkers(rw http.ResponseWriter, req *http.Request) {
 	s := m.getSession(req)
 	if s == nil || !s.Auths.Has(AUTH_MAP) {
 		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	if !s.Auths.Has(AUTH_MARKERS) {
+		json.NewEncoder(rw).Encode([]interface{}{})
 		return
 	}
 	markers := []FrontendMarker{}

@@ -65,8 +65,9 @@ func (m *Map) login(rw http.ResponseWriter, req *http.Request) {
 				Value:   hex.EncodeToString(session),
 			})
 			s := &Session{
-				ID:       hex.EncodeToString(session),
-				Username: req.FormValue("user"),
+				ID:        hex.EncodeToString(session),
+				Username:  req.FormValue("user"),
+				TempAdmin: u.Auths.Has("tempadmin"),
 			}
 			m.saveSession(s)
 			http.Redirect(rw, req, "/", 302)

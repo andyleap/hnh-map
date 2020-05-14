@@ -156,4 +156,23 @@ var migrations = []func(tx *bbolt.Tx) error{
 		}
 		return maps.SetSequence(highest + 1)
 	},
+	func(tx *bbolt.Tx) error {
+		users := tx.Bucket([]byte("users"))
+		if users == nil {
+			return nil
+		}
+		return users.ForEach(func(k, v []byte) error {
+			u := User{}
+			json.Unmarshal(v, &u)
+			if u.Auths.Has(AUTH_MAP) && !u.Auths.Has(AUTH_MARKERS) {
+				u.Auths = append(u.Auths, AUTH_MARKERS)
+				raw, err := json.Marshal(u)
+				if err != nil {
+					return err
+				}
+				users.Put(k, raw)
+			}
+			return nil
+		})
+	},
 }

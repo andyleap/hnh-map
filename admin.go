@@ -248,6 +248,7 @@ func (m *Map) rebuildZooms(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	needProcess := map[zoomproc]struct{}{}
+	saveGrid := map[zoomproc]string{}
 
 	noGrids := false
 	m.db.Update(func(tx *bbolt.Tx) error {
@@ -260,15 +261,23 @@ func (m *Map) rebuildZooms(rw http.ResponseWriter, req *http.Request) {
 			grid := GridData{}
 			json.Unmarshal(v, &grid)
 			needProcess[zoomproc{grid.Coord.Parent(), grid.Map}] = struct{}{}
+			saveGrid[zoomproc{grid.Coord, grid.Map}] = grid.ID
 			return nil
 		})
+		tx.DeleteBucket([]byte("tiles"))
 		return nil
 	})
 
 	if noGrids {
 		return
 	}
-
+	for g, id := range saveGrid {
+		f := fmt.Sprintf("%s/grids/%s.png", m.gridStorage, id)
+		if _, err := os.Stat(f); err != nil {
+			continue
+		}
+		m.SaveTile(g.m, g.c, 0, fmt.Sprintf("grids/%s.png", id), time.Now().UnixNano())
+	}
 	for z := 1; z <= 5; z++ {
 		process := needProcess
 		needProcess = map[zoomproc]struct{}{}
