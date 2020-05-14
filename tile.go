@@ -106,7 +106,7 @@ func (m *Map) watchGridUpdates(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	c := make(chan *TileData, 5)
+	c := make(chan *TileData, 1000)
 	mc := make(chan *Merge, 5)
 
 	m.gridUpdates.watch(c)
